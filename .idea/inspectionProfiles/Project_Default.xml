@@ -1,0 +1,77 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="DuplicatedCode" enabled="true" level="INFORMATION" enabled_by_default="true" />
+    <inspection_tool class="HttpUrlsUsage" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredUrls">
+        <list>
+          <option value="http://localhost" />
+          <option value="http://127.0.0.1" />
+          <option value="http://www.w3.org/2000/svg" />
+          <option value="http://www.w3.org/2000/10/XMLSchema" />
+          <option value="http://www.w3.org/2001/XMLSchema" />
+          <option value="http://www.w3.org/2001/XMLSchema-instance" />
+          <option value="http://www.w3.org/2003/03/wsdl" />
+          <option value="http://json-schema.org/draft" />
+          <option value="http://java.sun.com/xml/ns/" />
+          <option value="http://xmlns.jcp.org/xml/ns/" />
+          <option value="http://javafx.com/javafx/" />
+          <option value="http://javafx.com/fxml" />
+          <option value="http://maven.apache.org/xsd/" />
+          <option value="http://maven.apache.org/POM/" />
+          <option value="http://www.springframework.org/schema/" />
+          <option value="http://www.thymeleaf.org" />
+          <option value="http://www.ibm.com/webservices/xsd" />
+          <option value="http://schemas.xmlsoap.org/" />
+          <option value="http://cxf.apache.org/schemas/" />
+          <option value="http://d.yimg.com" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyChainedComparisonsInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoreConstantInTheMiddle" value="true" />
+    </inspection_tool>
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="20">
+            <item index="0" class="java.lang.String" itemvalue="dtw" />
+            <item index="1" class="java.lang.String" itemvalue="pytest" />
+            <item index="2" class="java.lang.String" itemvalue="kiwisolver" />
+            <item index="3" class="java.lang.String" itemvalue="py" />
+            <item index="4" class="java.lang.String" itemvalue="packaging" />
+            <item index="5" class="java.lang.String" itemvalue="numpy" />
+            <item index="6" class="java.lang.String" itemvalue="requests" />
+            <item index="7" class="java.lang.String" itemvalue="toml" />
+            <item index="8" class="java.lang.String" itemvalue="APScheduler" />
+            <item index="9" class="java.lang.String" itemvalue="chardet" />
+            <item index="10" class="java.lang.String" itemvalue="pandas" />
+            <item index="11" class="java.lang.String" itemvalue="discordwebhook" />
+            <item index="12" class="java.lang.String" itemvalue="matplotlib" />
+            <item index="13" class="java.lang.String" itemvalue="linenotipy" />
+            <item index="14" class="java.lang.String" itemvalue="slack-webhook" />
+            <item index="15" class="java.lang.String" itemvalue="pytz" />
+            <item index="16" class="java.lang.String" itemvalue="urllib3" />
+            <item index="17" class="java.lang.String" itemvalue="Pillow" />
+            <item index="18" class="java.lang.String" itemvalue="moukaru" />
+            <item index="19" class="java.lang.String" itemvalue="kanehoshii" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="N806" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredIdentifiers">
+        <list>
+          <option value="typing.Iterable.__getitem__" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
