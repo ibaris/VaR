@@ -27,7 +27,9 @@ import warnings
 import numpy as np
 import pandas as pd
 from arch import arch_model
+from scipy.stats import gumbel_r
 from scipy.stats import norm
+from .methods import (historic, parametric, monte_carlo, garch)
 
 __all__ = ["VaR"]
 
@@ -50,11 +52,11 @@ class VaR:
         Display the parsed weights.
     n : int
         Length of the parameter `daily_return`.
-    daily_mean : array
+    daily_pnl : array
         An array with the total daily mean values.
     info : dict
         A dict with general information about the parsed data:
-            * Daily Mean Return (float): Total daily mean return. The mean of the variable `daily_mean`.
+            * Daily Mean Return (float): Total daily mean return. The mean of the variable `daily_pnl`.
             * Daily Volatility (float) : Total daily volatility.  The std of the variable `daily_mean`.
             * Portfolio STD: The std of the whole portfolio weighted by the parsed weights.
 
@@ -86,6 +88,7 @@ class VaR:
 
         """
         self.alpha = np.array([5, 2.5, 1]) if alpha is None else np.atleast_1d(alpha)
+        self.__len_alpha = len(self.alpha)
 
         if len(self.alpha) > 3:
             raise AssertionError("The amount of alpha should be 3.")
@@ -101,12 +104,13 @@ class VaR:
         self.weights = weights
         self.n = self.daily_return.index.shape[0]
         self.__max_date = self.daily_return.index.max()
-        self.daily_mean = np.average(self.daily_return, 1, self.weights)
+        self.daily_pnl = pd.DataFrame(np.average(self.daily_return, 1, self.weights), index=self.daily_return.index,
+                                      columns=["Daily PnL"])
 
         cov_matrix = self.daily_return.cov()
 
-        self.info = {"Daily Mean Return": np.mean(self.daily_mean),
-                     "Daily Volatility": np.std(self.daily_mean),
+        self.info = {"Daily Mean Return": np.mean(self.daily_pnl.values),
+                     "Daily Volatility": np.std(self.daily_pnl.values),
                      "Portfolio STD": np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))}
 
     def __repr__(self):
@@ -119,11 +123,15 @@ class VaR:
 
         return head
 
-    def historic(self):
+    def historic(self, daily_pnl=None):
         """
         The historical method simply re-organizes actual historical returns, putting them in order from worst to best.
         It then assumes that history will repeat itself, from a risk perspective.
 
+        Parameters
+        ----------
+        daily_pnl : DataFrame, None
+            A DataFrame with
         Returns
         -------
         out : DataFrame
@@ -134,10 +142,7 @@ class VaR:
         [investopedia](https://www.investopedia.com/articles/04/092904.asp)
 
         """
-        var_values = np.percentile(self.daily_mean, self.alpha)
-        cvar_values = [np.mean(self.daily_mean[self.daily_mean <= item]) for item in var_values]
-        data = np.append(var_values, cvar_values).flatten()
-
+        data = historic(self.daily_pnl, self.alpha)
         df = pd.DataFrame(dict(zip(self.__header, data)), index=[self.__max_date])
         return df
 
@@ -155,26 +160,24 @@ class VaR:
         ----------
         [Risk.net](https://www.risk.net/definition/value-at-risk-var)
         """
-        z_values = norm.ppf(self.alpha / 100)
-
-        var_values = self.info["Daily Mean Return"] + z_values * self.info["Portfolio STD"]
-        cvar_values = [np.mean(self.daily_mean[self.daily_mean <= item]) for item in var_values]
-        data = np.append(var_values, cvar_values).flatten()
-
+        data = parametric(self.daily_pnl, self.alpha, self.info["Portfolio STD"])
         df = pd.DataFrame(dict(zip(self.__header, data)), index=[self.__max_date])
         return df
 
-    def monte_carlo(self, iv=None):
+    def monte_carlo(self, stressed=False):
         """
         The Monte Carlo Method involves developing a model for future stock price returns and running multiple
         hypothetical trials through the model. A Monte Carlo simulation refers to any method that randomly
         generates trials, but by itself does not tell us anything about the underlying methodology.
 
+        The Stressed Monte Carlo Method uses the Gumel distribution to generate the random trials. The Gumbel
+        distribution is sometimes referred to as a type I Fisher-Tippett distribution. It is also related to the
+        extreme value distribution, log-Weibull and Gompertz distributions.
+
         Parameters
         ---------
-        iv : int, float or None
-            Run the Simulation with another volatility value, such that a Implied Volatility, instead of the volatility
-            value derived from the daily returns.
+        stressed : bool
+            Use the Stressed Monte Carlo Method. Default is False.
 
         Returns
         -------
@@ -183,17 +186,11 @@ class VaR:
 
         References
         ----------
-        [investopedia](https://www.investopedia.com/articles/04/092904.asp)
+        [investopedia 1](https://www.investopedia.com/articles/04/092904.asp)
+        [investopedia 2](https://www.investopedia.com/ask/answers/061515/what-stress-testing-value-risk-var.asp)
+        [SciPy Gumbel Function](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gumbel_r.html)
         """
-        sigma = self.info["Daily Volatility"] if iv is None else iv
-
-        PnL_list = np.random.normal(self.info["Daily Mean Return"], sigma, 500000)
-
-        var_values = np.percentile(PnL_list, self.alpha)
-        PnL_frame = [PnL_list[PnL_list <= item] for item in var_values]
-        cvar_values = [np.nanmean(item) for item in PnL_frame]
-        data = np.append(var_values, cvar_values).flatten()
-
+        data = monte_carlo(self.daily_pnl, self.alpha, stressed=stressed)
         df = pd.DataFrame(dict(zip(self.__header, data)), index=[self.__max_date])
         return df
 
@@ -212,21 +209,7 @@ class VaR:
         [Julija Cerović Smolović, 2017](https://doi.org/10.1080/1331677X.2017.1305773)
 
         """
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            am = arch_model(self.daily_mean, vol='Garch', p=1, o=0, q=1, dist='skewt')
-            res = am.fit(disp='off')
-            forecasts = res.forecast(reindex=True)
-
-        q = am.distribution.ppf(self.alpha / 100, res.params[-2:])
-        value_at_risk = forecasts.mean.values + np.sqrt(forecasts.variance).values * q[None, :]
-
-        var_values = [value_at_risk[[-1, ]][0][0], value_at_risk[[-1, ]][0][1], value_at_risk[[-1, ]][0][2]]
-        cvar_values = [np.mean(self.daily_mean[self.daily_mean <= item]) for item in var_values]
-        cvar_values = [var_values[-1] if math.isnan(item) else item for item in cvar_values]
-
-        data = np.append(var_values, cvar_values).flatten()
-
+        data = garch(self.daily_pnl, self.alpha)
         df = pd.DataFrame(dict(zip(self.__header, data)), index=[self.__max_date])
         return df
 
@@ -251,12 +234,90 @@ class VaR:
         garch
         """
         summary = pd.DataFrame()
-        parametric = self.parametric()
-        historic = self.historic()
-        monte_carlo = self.monte_carlo()
-        garch = self.garch()
-        summary = summary.append(parametric).append(historic).append(monte_carlo).append(garch)
-        idx = ['Parametric', 'Historical', 'Monte Carlo', 'GARCH']
+        method_parametric = self.parametric()
+        method_historic = self.historic()
+        method_monte_carlo = self.monte_carlo()
+        method_stressed_monte_carlo = self.monte_carlo(stressed=True)
+        method_garch = self.garch()
+        summary = summary.append(method_parametric).append(method_historic).append(method_monte_carlo).append(
+            method_stressed_monte_carlo).append(
+            method_garch)
+        idx = ['Parametric', 'Historical', 'Monte Carlo', 'Stressed Monte Carlo', 'GARCH']
         summary.index = idx
         summary.index.name = time.strftime("%Y-%m-%d")
         return summary
+
+    def backtest_data(self, method, window_days=250):
+        """
+        Generate the Backtest data.
+
+        Parameters
+        ----------
+        method : str
+            Define a VaR calculation method:
+                * 'h' or 'historical': VaR calculated with the historical method,
+                * 'p' or 'parametric': VaR calculated with the parametric method,
+                * 'mc' or 'monte carlo': VaR calculated with the monte carlo method,
+                * 'smv' or 'stressed monte carlo': VaR calculated with the stressed monte carlo method,
+                * 'g' or 'garch': VaR calculated with the garch method.
+        window_days : int
+            Backtest horizon in days.
+
+        Returns
+        -------
+        out : pd.DataFrame
+            A DataFrame object with Daily PnL, VaR and VaR exception values.
+        """
+        if method == "historical" or method == "h":
+            method_applied = historic
+            kwargs = {"daily_pnl": None, "alpha": self.alpha}
+        elif method == "parametric" or method == "p":
+            method = "p"
+            method_applied = parametric
+            kwargs = {"daily_pnl": None, "alpha": self.alpha, "daily_std": None}
+        elif method == "monte carlo" or method == "mc":
+            method_applied = monte_carlo
+            kwargs = {"daily_pnl": None, "alpha": self.alpha, "stressed": False}
+        elif method == "stressed monte carlo" or method == "smc":
+            method_applied = monte_carlo
+            kwargs = {"daily_pnl": None, "alpha": self.alpha, "stressed": True}
+        elif method == "garch" or method == "g":
+            method_applied = garch
+            kwargs = {"daily_pnl": None, "alpha": self.alpha}
+
+        else:
+            raise ValueError("Method {0} not understood. Available methods are 'h' ('historical'), 'p' ('parametric'), "
+                             "'mc' ('monte carlo'), 'smv' ('stressed monte carlo') and 'g' ('garch').")
+
+        daily_var_table = pd.DataFrame()
+        for i in range(self.n - window_days):
+            daily_return_sample = self.daily_return[i:i + window_days]
+
+            kwargs["daily_pnl"] = pd.DataFrame(np.average(daily_return_sample, 1, self.weights),
+                                               index=daily_return_sample.index,
+                                               columns=["Daily PnL"])
+
+            if method == "p":
+                cov_matrix = daily_return_sample.cov()
+                daily_std = np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))
+                kwargs["daily_std"] = daily_std
+
+            daily_var_df = pd.DataFrame(dict(zip(self.__header, method_applied(**kwargs))),
+                                        index=[daily_return_sample.index.max()])
+
+            daily_var_table = daily_var_table.append(daily_var_df)
+
+        daily_var_table.index = daily_var_table.index + pd.DateOffset(1)  # Adjustment for matching VaR and actual PnL
+        df = pd.merge_asof(self.daily_pnl, daily_var_table, right_index=True, left_index=True)
+
+        header = self.__header[0:self.__len_alpha]
+
+        df[header[0] + " exception"] = np.where((df[header[-1]] < df['Daily PnL']) &
+                                                (df['Daily PnL'] < df[header[0]]),
+                                                'True', 'False')
+
+        df[header[-1] + " exception"] = np.where(df['Daily PnL'] < df[header[-1]], 'True', 'False')
+
+        df = df.dropna()
+
+        return df
