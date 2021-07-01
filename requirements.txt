@@ -3,3 +3,7 @@ pandas
 arch
 scipy
 setuptools
+matplotlib
+tqdm
+var
+seaborn

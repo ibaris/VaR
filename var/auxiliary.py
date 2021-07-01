@@ -24,5 +24,8 @@ def load_data():
     out : DataFrame
     """
     data = pd.read_csv(__PATH__)
+    data["Date"] = pd.to_datetime(data["Date"], format='%Y-%m-%d')
     data = data.set_index("Date")
-    return data
+
+    return data / 100
+
