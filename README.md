@@ -1,7 +1,7 @@
 <div align="center">
   <p>
     <a href='https://www.freepik.com/vectors/business'>
-      <img src="./ressources/logo/var_logo.png" width="400" height="400">
+      <img src="./resources/logo/var_logo.png" width="400" height="400">
     </a>
   </p>
 
