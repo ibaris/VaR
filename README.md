@@ -35,7 +35,7 @@ value at risk (VaR), which is defined as the maximum loss over a targeted horizo
 In other words, it is an estimation of the tails of the empirical distribution of financial losses. It can be used
 in all types of financial risk measurement.
 
-This introruction is from ([Julija Cerović Smolović, 2017](https://doi.org/10.1080/1331677X.2017.1305773)).
+This introruction is from [Julija Cerović Smolović, 2017](https://doi.org/10.1080/1331677X.2017.1305773).
 
 # Key Features
 Calculate, Backtest and Plot the Value-at-Risk or the Conditional-Value-at-Risk with different methods:
