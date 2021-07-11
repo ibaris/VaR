@@ -10,6 +10,13 @@ Setup of VaR Package
 from setuptools import find_packages
 from setuptools import setup
 
+try:
+    import pypandoc
+
+    long_description = pypandoc.convert('README_PYPI.md', 'rst')
+except(IOError, ImportError):
+    long_description = open('README_PYPI.md').read()
+
 
 def get_packages():
     find_packages(exclude=['docs']),
@@ -45,19 +52,18 @@ setup(name='var',
 
       author="Ismail Baris",
       maintainer='Ismail Baris',
-
-      url='https://github.com/ibaris/kane-hoshii',
-      long_description='Different Methods to Estimate the Value-at-Risk of a portfolio.',
+      author_email='i.baris@outlook.de',
+      url='https://github.com/ibaris/VaR',
+      long_description=long_description,
 
       # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
       classifiers=[
-          "Programming Language :: Python :: 3",
-          "Programming Language :: Python :: 3.3",
-          "Programming Language :: Python :: 3.4",
-          "Programming Language :: Python :: 3.5",
-          "Programming Language :: Python :: 3.6",
-          "Programming Language :: Python :: 3.7"
-          "Programming Language :: Python :: 3.8"
+          'Intended Audience :: Science/Research',
+          'Intended Audience :: Developers',
+          'Intended Audience :: Education',
+          'Intended Audience :: End Users/Desktop',
+          'Programming Language :: Python :: 3.7',
+          'Operating System :: Microsoft',
 
       ],
       include_package_data=True,
