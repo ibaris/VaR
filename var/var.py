@@ -32,7 +32,7 @@ import seaborn as sns
 from arch.utility.exceptions import ConvergenceWarning
 from tqdm import trange
 
-from .methods import (historic, parametric, monte_carlo, garch, cdar)
+from .methods import (__METHODS__, historic, parametric, monte_carlo, monte_carlo_stressed, garch)
 
 __all__ = ["VaR"]
 
@@ -60,7 +60,8 @@ pd.set_option('display.max_rows', 15)
 # ----------------------------------------------------------------------------------------------
 class VaR:
     """
-    The class to estimate the Value at Risk (VaR). The VaR can be calculated using different techniques like:
+    The class to estimate the Value at Risk (VaR), Conditional Value at Risk (CVaR) and the Conditional Drawdown at risk. The
+    VaR can be calculated using different techniques like:
         * Parametric Method
         * Historical Method
         * Monte Carlo Method
@@ -111,25 +112,23 @@ class VaR:
         --------
 
         """
-        self.alpha = np.array([0.05, 0.025, 0.01]) if alpha is None else np.atleast_1d(alpha).sort()
-        self.__len_alpha = len(self.alpha)
+        self.alpha = np.array([0.05, 0.025, 0.01]) if alpha is None else np.atleast_1d(alpha)
+        self.alpha.sort()
+        self.alpha = self.alpha[::-1]
 
-        if len(self.alpha) > 3:
+        self.len_alpha = len(self.alpha)
+
+        if self.len_alpha > 3:
             raise AssertionError("The amount of alpha should be 3.")
 
-        confidence = [1 - item for item in self.alpha]
-        header_var = ["VaR(" + str(item * 100) + ")" for item in confidence]
-        header_cvar = ["CVaR(" + str(item * 100) + ")" for item in confidence]
-        header_var.extend(header_cvar)
+        confidence = 1 - self.alpha
+        headers = ["VaR", "CVaR", "CDaR"]
 
-        self.header_cdar = ["CDaR(" + str(item * 100) + ")" for item in confidence]
+        self.header = list()
+        for i in range(len(headers)):
+            self.header.extend(["{0}(".format(headers[i]) + str(item * 100) + ")" for item in confidence])
 
-        self.__header = header_var
-        self.header_var = header_var[0:self.__len_alpha]
-        self.header_cvar = header_var[self.__len_alpha:]
-        self.header_var_exception = [item + " exception" for item in self.header_var]
-        self.header_cvar_exception = [item + " exception" for item in self.header_cvar]
-        self.header_cdar_exception = [item + " exception" for item in self.header_cdar]
+        self.header_exception = [item + " exception" for item in self.header]
 
         self.daily_return = daily_return
         self.weights = weights
@@ -191,8 +190,8 @@ class VaR:
         [investopedia](https://www.investopedia.com/articles/04/092904.asp)
 
         """
-        data = historic(self.daily_pnl, self.alpha)
-        df = pd.DataFrame(dict(zip(self.__header, data)), index=[self.__max_date])
+        data = historic(self.daily_pnl.values, self.alpha)
+        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
 
     def parametric(self):
@@ -209,8 +208,8 @@ class VaR:
         ----------
         [Risk.net](https://www.risk.net/definition/value-at-risk-var)
         """
-        data = parametric(self.daily_pnl, self.alpha, self.info["Portfolio Volatility"])
-        df = pd.DataFrame(dict(zip(self.__header, data)), index=[self.__max_date])
+        data = parametric(self.daily_pnl.values, self.alpha, self.info["Portfolio Volatility"])
+        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
 
     def monte_carlo(self, stressed=False):
@@ -239,8 +238,13 @@ class VaR:
         [investopedia 2](https://www.investopedia.com/ask/answers/061515/what-stress-testing-value-risk-var.asp)
         [SciPy Gumbel Function](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gumbel_r.html)
         """
-        data = monte_carlo(self.daily_pnl, self.alpha, stressed=stressed)
-        df = pd.DataFrame(dict(zip(self.__header, data)), index=[self.__max_date])
+        if stressed:
+            block_maxima = self.daily_pnl.resample('W').min().dropna().values
+            data = monte_carlo_stressed(block_maxima, self.alpha)
+        else:
+            data = monte_carlo(self.daily_pnl.values, self.alpha)
+
+        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
 
     def garch(self):
@@ -258,32 +262,8 @@ class VaR:
         [Julija Cerović Smolović, 2017](https://doi.org/10.1080/1331677X.2017.1305773)
 
         """
-        data = garch(self.daily_pnl, self.alpha)
-        df = pd.DataFrame(dict(zip(self.__header, data)), index=[self.__max_date])
-        return df
-
-    def cdar(self, comp=True):
-        """
-        Calculate the Conditional Drawdown at Risk (CDaR) of a returns series.
-
-        Parameters
-        ----------
-        comp : bool
-            If True (Default) use the compounded cumulative returns.
-
-        Returns
-        -------
-        out : list
-            A list object with Value at Risk values at different confidence intervals.
-
-        Notes
-        -----
-        CDaR of 0.20 at α=0.01 level means that for 1% worst cases of historical portfolio drawdowns, the average
-        drawdown is 20%.
-
-        """
-        data = cdar(self.daily_pnl, self.alpha, comp=comp)
-        df = -1 * pd.DataFrame(dict(zip(self.__header, data)), index=[self.__max_date])
+        data = garch(self.daily_pnl.values, self.alpha)
+        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
 
     def summary(self):
@@ -312,7 +292,6 @@ class VaR:
         method_monte_carlo = self.monte_carlo()
         method_stressed_monte_carlo = self.monte_carlo(stressed=True)
         method_garch = self.garch()
-        # cdar_comp = self.cdar(comp=True)
         summary = summary.append(method_parametric).append(method_historic).append(method_monte_carlo).append(
             method_stressed_monte_carlo).append(
             method_garch)
@@ -329,11 +308,11 @@ class VaR:
         ----------
         method : str
             Define a VaR calculation method:
-                * 'h' or 'historical': VaR calculated with the historical method,
-                * 'p' or 'parametric': VaR calculated with the parametric method,
-                * 'mc' or 'monte carlo': VaR calculated with the monte carlo method,
-                * 'smv' or 'stressed monte carlo': VaR calculated with the stressed monte carlo method,
-                * 'g' or 'garch': VaR calculated with the garch method.
+                * 'h': VaR calculated with the historical method,
+                * 'p': VaR calculated with the parametric method,
+                * 'mc': VaR calculated with the monte carlo method,
+                * 'smv': VaR calculated with the stressed monte carlo method,
+                * 'g': VaR calculated with the garch method.
         window_days : int
             Backtest horizon in days.
 
@@ -342,73 +321,57 @@ class VaR:
         out : pd.DataFrame
             A DataFrame object with Daily PnL, VaR and VaR exception values.
         """
-        if method == "historical" or method == "h":
-            method_applied = historic
-            kwargs = {"daily_pnl": None, "alpha": self.alpha}
+        method_applied = __METHODS__[method]
+        kwargs = {"pnl": None, "alpha": self.alpha}
 
-        elif method == "parametric" or method == "p":
-            method = "p"
-            method_applied = parametric
-            kwargs = {"daily_pnl": None, "alpha": self.alpha, "daily_std": None}
-
-        elif method == "monte carlo" or method == "mc":
-            method_applied = monte_carlo
-            kwargs = {"daily_pnl": None, "alpha": self.alpha, "stressed": False}
-
-        elif method == "stressed monte carlo" or method == "smc":
-            method_applied = monte_carlo
-            kwargs = {"daily_pnl": None, "alpha": self.alpha, "stressed": True}
-        elif method == "garch" or method == "g":
-            method_applied = garch
-            kwargs = {"daily_pnl": None, "alpha": self.alpha}
-
-        else:
+        if method not in __METHODS__.keys():
             raise ValueError("Method {0} not understood. Available methods are 'h' ('historical'), 'p' ('parametric'), "
                              "'mc' ('monte carlo'), 'smv' ('stressed monte carlo') and 'g' ('garch').".format(method))
 
         function_name = method_applied.__name__
         str_method = function_name.replace("_", " ").title()
 
-        if "monte" in function_name:
-            if kwargs["stressed"]:
-                str_method += " (Stressed)"
-
-        pbar_message = "Backtest Data: {method} Method".format(method=str_method)
+        desc = "Backtest: {method} Method".format(method=str_method)
 
         var_dict = dict()
-        for i in trange(self.n - window_days, desc=pbar_message, leave=True):
+        for i in trange(self.n - window_days, desc=desc, leave=True):
             daily_return_sample = self.daily_return[i:i + window_days]
 
-            kwargs["daily_pnl"] = pd.DataFrame(np.average(daily_return_sample, 1, self.weights),
-                                               index=daily_return_sample.index,
-                                               columns=["Daily PnL"])
+            daily_pnl = np.average(daily_return_sample, 1, self.weights)
 
-            if method == "p":
+            if method == "smc":
+                kwargs["pnl"] = pd.DataFrame(daily_pnl, index=daily_return_sample.index,
+                                             columns=["Daily PnL"]).resample('W').min().dropna().values
+
+            elif method == "p":
+                kwargs["pnl"] = daily_pnl
                 cov_matrix = daily_return_sample.cov()
                 daily_std = np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))
                 kwargs["daily_std"] = daily_std
+            else:
+                kwargs["pnl"] = daily_pnl
 
             var_dict[daily_return_sample.index.max()] = method_applied(**kwargs)
 
         daily_var_table = pd.DataFrame.from_dict(var_dict).T.astype("float")
         daily_var_table.index.name = str_method
-        daily_var_table.columns = self.__header
+        daily_var_table.columns = self.header
 
         daily_var_table.index = daily_var_table.index + pd.DateOffset(1)  # Adjustment for matching VaR and actual PnL
 
         df = pd.merge_asof(self.daily_pnl, daily_var_table, right_index=True, left_index=True)
 
         df = df.apply(pd.to_numeric)
-        df[self.header_var_exception[0]] = np.where((df[self.header_var[-1]] < df['Daily PnL']) &
-                                                    (df['Daily PnL'] < df[self.header_var[0]]),
-                                                    'True', 'False')
-        df[self.header_var_exception[-1]] = np.where(df['Daily PnL'] < df[self.header_var[-1]], 'True', 'False')
 
-        df[self.header_cvar_exception[0]] = np.where((df[self.header_cvar[-1]] < df['Daily PnL']) &
-                                                     (df['Daily PnL'] < df[self.header_cvar[0]]),
-                                                     'True', 'False')
+        for windows in [0, 3, 6]:
+            header_exception = self.header_exception[windows: windows + self.len_alpha]
+            header = self.header[windows: windows + self.len_alpha]
 
-        df[self.header_cvar_exception[-1]] = np.where(df['Daily PnL'] < df[self.header_cvar[-1]], 'True', 'False')
+            df[header_exception[0]] = np.where((df[header[-1]] < df['Daily PnL']) &
+                                               (df['Daily PnL'] < df[header[0]]),
+                                               'True', 'False')
+
+            df[header_exception[-1]] = np.where(df['Daily PnL'] < df[header[-1]], 'True', 'False')
 
         df = df.dropna()
         df.index.name = str_method
@@ -441,41 +404,55 @@ class VaR:
         table = self.__get_data_range(backtest_data, begin_date, end_date)
 
         observations = len(table)
-        header = [self.header_var[0], self.header_var[-1]]
-        header_cvar = [self.header_cvar[0], self.header_cvar[-1]]
 
-        exception_var_data = [table[table[item] == 'True'] for item in [self.header_var_exception[0], self.header_var_exception[-1]]]
-        exception_cvar_data = [table[table[item] == 'True'] for item in [self.header_cvar_exception[0], self.header_cvar_exception[-1]]]
+        exception_data = list()
+        deviation_data = list()
+        statistics_data = list()
+        count_data = list()
+        count_pct_data = list()
 
-        deviation_var = [item['Daily PnL'] - item[header[i]] for i, item in enumerate(exception_var_data)]
-        deviation_cvar = [item['Daily PnL'] - item[header_cvar[i]] for i, item in enumerate(exception_cvar_data)]
+        header_list = list()
+        for windows in [0, 3, 6]:
+            header_exception = self.header_exception[windows: windows + self.len_alpha]
+            header = self.header[windows: windows + self.len_alpha]
+            header_list.extend([header[0], header[-1]])
 
-        statistics_var = [(item.mean(), item.std(), item.max(), item.min()) for item in [np.concatenate([item.values for item in deviation_var]), deviation_var[-1]]]
-        statistics_cvar = [(item.mean(), item.std(), item.max(), item.min()) for item in [np.concatenate([item.values for item in deviation_var]), deviation_cvar[-1]]]
+            tmp_exc = [table[table[item] == 'True'] for item in [header_exception[0], header_exception[-1]]]
+            tmp_dev = [item['Daily PnL'] - item[header[i]] for i, item in enumerate(tmp_exc)]
 
-        count_var = [np.sum([item.count() for item in deviation_var]), deviation_var[-1].count()]
-        count_var_pct = [item / observations for item in count_var]
+            try:
+                tmp_stat = [(item.mean(), item.std(), item.max(), item.min()) for item in
+                            [np.concatenate([item.values for item in tmp_dev]), tmp_dev[-1]]]
+            except (NameError, ValueError):
+                tmp_stat = [(0, 0, 0, 0), (0, 0, 0, 0)]
 
-        count_cvar = [np.sum([item.count() for item in deviation_cvar]), deviation_cvar[-1].count()]
-        count_cvar_pct = [item / observations for item in count_cvar]
+            count = [np.sum([item.count() for item in tmp_dev]), tmp_dev[-1].count()]
+            count_pct = [item / observations for item in count]
 
-        columns = ["Amount", "Amount in Percent", "Mean Deviation", "STD Deviation", "Min Deviation", "Max Deviation"]
+            exception_data.append(tmp_exc)
+            deviation_data.append(tmp_dev)
+            statistics_data.append(tmp_stat)
+            count_data.append(count)
+            count_pct_data.append(count_pct)
+
+        columns = ["Amount", "Percent", "Mean Deviation", "STD Deviation", "Min Deviation", "Max Deviation"]
         index = ["Observations"]
-        index.extend(header)
-        index.extend(header_cvar)
+        index.extend(header_list)
 
         df = pd.DataFrame(columns=columns, index=index)
 
         df.iloc[0] = [observations, 1, 0, 0, 0, 0]
 
-        df.iloc[1] = [count_var[0], count_var_pct[0], statistics_var[0][0], statistics_var[0][1], statistics_var[0][2],
-                      statistics_var[0][3]]
-        df.iloc[2] = [count_var[1], count_var_pct[1], statistics_var[1][0], statistics_var[1][1], statistics_var[1][2],
-                      statistics_var[1][3]]
-        df.iloc[3] = [count_cvar[0], count_cvar_pct[0], statistics_cvar[0][0], statistics_cvar[0][1], statistics_cvar[0][2],
-                      statistics_cvar[0][3]]
-        df.iloc[4] = [count_cvar[1], count_cvar_pct[1], statistics_cvar[1][0], statistics_cvar[1][1], statistics_cvar[1][2],
-                      statistics_cvar[1][3]]
+        counter = [1, 3, 5]
+
+        for j in range(3):
+            for i in range(2):
+                df.iloc[i + counter[j]] = [count_data[j][i],
+                                           count_pct_data[j][i],
+                                           statistics_data[j][i][0],
+                                           statistics_data[j][i][1],
+                                           statistics_data[j][i][2],
+                                           statistics_data[j][i][3]]
 
         return df
 
@@ -496,14 +473,24 @@ class VaR:
         """
         table = self.__get_data_range(backtest_data, begin_date, end_date)
 
+        header_list = list()
+        header_exception_list = list()
+
+        for windows in [0]:
+            header_exception = self.header_exception[windows: windows + self.len_alpha]
+            header = self.header[windows: windows + self.len_alpha]
+            header_list.extend([header[0], header[-1]])
+            header_exception_list.extend([header_exception[0], header_exception[-1]])
+
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
         ax.plot(table['Daily PnL'], color='#003049')
-        ax.plot(table[self.header_var[0]], ":", color='#FF7600', alpha=0.7)
-        ax.plot(table[self.header_var[-1]], "-.", color='#9d0208', alpha=0.7)
 
-        exceed_0 = table[table[self.header_var_exception[0]] == 'True']['Daily PnL']
-        exceed_1 = table[table[self.header_var_exception[-1]] == 'True']['Daily PnL']
+        ax.plot(table[header_list[0]], ":", color='#FF7600', alpha=0.7)
+        ax.plot(table[header_list[-1]], "-.", color='#9d0208', alpha=0.7)
+
+        exceed_0 = table[table[header_exception_list[0]] == 'True']['Daily PnL']
+        exceed_1 = table[table[header_exception_list[-1]] == 'True']['Daily PnL']
 
         ax.scatter(exceed_0.index, exceed_0, marker='s', facecolors='none', edgecolors='#FF7600', s=120)
         ax.scatter(exceed_1.index, exceed_1, marker='x', facecolors='#9d0208', s=120)
@@ -514,10 +501,10 @@ class VaR:
         ax.spines['left'].set_visible(False)
 
         ax.legend(['Daily PnL',
-                   self.header_var[0],
-                   self.header_var[-1],
-                   self.header_var_exception[0],
-                   self.header_var_exception[-1]],
+                   header_list[0],
+                   header_list[-1],
+                   header_exception_list[0],
+                   header_exception_list[-1]],
                   loc='upper left', prop={'size': 12})
 
         ax.set_title(backtest_data.index.name + ' VaR Backtest', fontsize=16, fontweight=1)
@@ -542,15 +529,29 @@ class VaR:
         """
         table = self.__get_data_range(backtest_data, begin_date, end_date)
 
+        header_list = list()
+        header_exception_list = list()
+
+        for windows in [3]:
+            header_exception = self.header_exception[windows: windows + self.len_alpha]
+            header = self.header[windows: windows + self.len_alpha]
+            header_list.extend([header[0], header[-1]])
+            header_exception_list.extend([header_exception[0], header_exception[-1]])
+
         daily_loss = table[table["Daily PnL"] < 0]
 
-        exceed_1 = daily_loss[daily_loss[self.header_cvar_exception[-1]] == 'True']['Daily PnL']
+        exceed_1 = daily_loss[daily_loss[header_exception_list[0]] == 'True']['Daily PnL']
+        exceed_2 = daily_loss[daily_loss[header_exception_list[-1]] == 'True']['Daily PnL']
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
         ax.plot(daily_loss.index, daily_loss['Daily PnL'], label='Actual Loss', alpha=1, color='#2940D3')
-        ax.plot(daily_loss.index, daily_loss[self.header_cvar[-1]], label=self.header_cvar[-1], color='deeppink', alpha=0.7)
+
+        ax.plot(daily_loss.index, daily_loss[header[0]], label=header[0], color='#FF7600', alpha=0.7)
+        ax.plot(daily_loss.index, daily_loss[header[-1]], label=header[-1], color='#9d0208', alpha=0.7)
+
         ax.scatter(exceed_1.index, exceed_1, marker='s', facecolors='none', edgecolors='deeppink', s=120)
+        ax.scatter(exceed_2.index, exceed_2, marker='x', facecolors='#9d0208', s=120)
 
         ax.legend(loc=3, prop={'size': 12})
         ax.spines['bottom'].set_color('#b0abab')
@@ -558,6 +559,69 @@ class VaR:
         ax.spines['right'].set_visible(False)
         ax.spines['left'].set_visible(False)
         ax.set_title(table.index.name + ' CVaR Backtest', fontsize=16, fontweight=1)
+
+        ax.legend(['Daily PnL',
+                   header_list[0],
+                   header_list[-1],
+                   header_exception_list[0],
+                   header_exception_list[-1]], prop={'size': 12})
+
+        plt.tight_layout()
+        plt.show()
+
+    def cdar_plot(self, backtest_data, begin_date=None, end_date=None):
+        """
+        Plot the Conditional Drawdown at Risk backtest data.
+
+        Parameters
+        ----------
+        backtest_data : pd.DataFrame
+            The result of the function `backtest`.
+        begin_date, end_date : str or None
+            A begin and end date. If None, all data points will be considered.
+
+        Returns
+        -------
+        None
+        """
+        table = self.__get_data_range(backtest_data, begin_date, end_date)
+
+        header_list = list()
+        header_exception_list = list()
+
+        for windows in [6]:
+            header_exception = self.header_exception[windows: windows + self.len_alpha]
+            header = self.header[windows: windows + self.len_alpha]
+            header_list.extend([header[0], header[-1]])
+            header_exception_list.extend([header_exception[0], header_exception[-1]])
+
+        daily_loss = table[table["Daily PnL"] < 0]
+
+        exceed_1 = daily_loss[daily_loss[header_exception_list[0]] == 'True']['Daily PnL']
+        exceed_2 = daily_loss[daily_loss[header_exception_list[-1]] == 'True']['Daily PnL']
+
+        fig, ax = plt.subplots(1, 1, figsize=(14, 4))
+
+        ax.plot(daily_loss.index, daily_loss['Daily PnL'], label='Actual Loss', alpha=1, color='#2940D3')
+
+        ax.plot(daily_loss.index, daily_loss[header[0]], label=header[0], color='#FF7600', alpha=0.7)
+        ax.plot(daily_loss.index, daily_loss[header[-1]], label=header[-1], color='#9d0208', alpha=0.7)
+
+        ax.scatter(exceed_1.index, exceed_1, marker='s', facecolors='none', edgecolors='deeppink', s=120)
+        ax.scatter(exceed_2.index, exceed_2, marker='x', facecolors='#9d0208', s=120)
+
+        ax.legend(loc=3, prop={'size': 12})
+        ax.spines['bottom'].set_color('#b0abab')
+        ax.spines['top'].set_color('#b0abab')
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.set_title(table.index.name + ' CDaR Backtest', fontsize=16, fontweight=1)
+
+        ax.legend(['Daily PnL',
+                   header_list[0],
+                   header_list[-1],
+                   header_exception_list[0],
+                   header_exception_list[-1]], prop={'size': 12})
 
         plt.tight_layout()
         plt.show()
