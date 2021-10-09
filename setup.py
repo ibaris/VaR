@@ -35,10 +35,10 @@ def get_version():
     out : str
     """
     version = dict()
-    with open("VaR/__version__.py") as fp:
+    with open("var/__version__.py") as fp:
         exec(fp.read(), version)
 
-    return version['__version__']
+    return version['__version__'].split("-")[0]
 
 
 with open('requirements.txt') as f:
