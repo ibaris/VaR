@@ -23,7 +23,6 @@ with different methods, such that:
 - Parametric
 - Monte Carlo
 - Stressed Monte Carlo
-- Parametric GARCH 
   
 methods.
 
@@ -50,4 +49,4 @@ it can be a temporary directory) and then run::
 # Dependencies
 
 * Python: Python 3.7
-* Packages: numpy, pandas, arch, scipy, matplotlib, tqdm, seaborn, numba
+* Packages: numpy, pandas, scipy, matplotlib, tqdm, seaborn, numba
