@@ -64,8 +64,6 @@ __TITLE__ = ["VaR", "CVaR", "CDaR"]
 # ----------------------------------------------------------------------------------------------
 # Value at Risk Class
 # ----------------------------------------------------------------------------------------------
-
-
 class VaR:
     """
     The class to estimate the Value at Risk (VaR), Conditional Value at Risk (CVaR) and the Conditional Drawdown at risk. The
@@ -76,15 +74,15 @@ class VaR:
 
     Attributes
     ----------
-    alpha : array
+    alpha : number
         Displays the array where the confidence level is stored.
     daily_return : data_frame
         The parsed DataFrame object with the daily returns.
-    weights : array, optional
+    weights : array_like
         Display the parsed weights.
     n : int
         Length of the parameter `daily_return`.
-    daily_pnl : array
+    pnl : array_like
         An array with the total daily mean values.
     info : dict
         A dict with general information about the parsed data:
@@ -108,7 +106,7 @@ class VaR:
             A DataFrame object where the columns are the asset daily returns where the index is the corresponding date.
         weights : array_like, optional
             An array with different weights corresponding to the assets. Default is 1.
-        alpha : list or None, optional
+        alpha : number, optional
             A confidence interval (alpha) for VaR, by default 0.01.
 
         Notes
@@ -172,7 +170,8 @@ class VaR:
     # Public Methods
     # ----------------------------------------------------------------------------------------------
     def historic(self) -> data_frame:
-        """
+        """Historic
+
         The historical method simply re-organizes actual historical returns, putting them in order from worst to best.
         It then assumes that history will repeat itself, from a risk perspective.
 
@@ -193,7 +192,8 @@ class VaR:
         return df
 
     def parametric(self) -> data_frame:
-        """
+        """Parametric
+
         Under the parametric method, also known as variance-covariance method, VAR is calculated as a function of mean
         and variance of the returns series, assuming normal distribution.
 
@@ -213,7 +213,8 @@ class VaR:
         return df
 
     def monte_carlo(self, stressed=False) -> data_frame:
-        """
+        """Monte Carlo
+
         The Monte Carlo Method involves developing a model for future stock price returns and running multiple
         hypothetical trials through the model. A Monte Carlo simulation refers to any method that randomly
         generates trials, but by itself does not tell us anything about the underlying methodology.
@@ -224,7 +225,7 @@ class VaR:
 
         Parameters
         ---------
-        stressed : bool
+        stressed : bool, optional
             Use the Stressed Monte Carlo Method. Default is False.
 
         Returns
@@ -249,7 +250,7 @@ class VaR:
         return df
 
     def cdar(self) -> data_frame:
-        """
+        """CDaR
 
         Calculate the Conditional Drawdown at Risk (CDaR) of a returns series.
 
@@ -268,7 +269,8 @@ class VaR:
         return df
 
     def summary(self) -> data_frame:
-        """
+        """Summary
+
         Summary of Value-at-Risk with different models:
             * Parametric Method
             * Historical Method
@@ -301,7 +303,8 @@ class VaR:
         return summary
 
     def backtest(self, method: str, window_days: int = 250) -> data_frame:
-        """
+        """Backtest
+
         Generate the Backtest data.
 
         Parameters
@@ -381,7 +384,8 @@ class VaR:
         return df
 
     def evaluate(self, backtest_data: data_frame, begin_date: str = None, end_date: str = None) -> data_frame:
-        """
+        """Evaluate
+
         Evaluate the backtest results.
 
         Parameters
@@ -444,7 +448,7 @@ class VaR:
         return df
 
     def plot(self, backtest_data: data_frame, method: str = "var", begin_date: str = None,
-             end_date: str = None, figsize=(14, 4)) -> None:
+             end_date: str = None, figsize=(14, 4)):
         """
         Plot the Value at Risk backtest data.
 
@@ -454,15 +458,18 @@ class VaR:
             The result of the function `backtest`.
         method : str, optional
             Determine the quantity to be plotted:
-                * var : Value at Risk,
+                * var (default): Value at Risk,
                 * cvar : Conditional Value at Risk,
                 * cdar : Conditional Drawdown at Risk.
         begin_date, end_date : str or None, optional
             A begin and end date. If None, all data points will be considered.
+        figsize : Tuple(int, int), optional
+            The subplot figure size, by default (14, 4).
 
         Returns
         -------
-        None
+        fig, ax
+            Returns the figure and axis instances of the matplotlib subplot.
         """
         if method not in list(__XaR__.keys()):
             raise AssertionError("Method should be `var`, `cvar` or `cdar`.")
