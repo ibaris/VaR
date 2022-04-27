@@ -95,10 +95,10 @@ weights = np.array([0.40, 0.50, 0.10])
 
 var = VaR(data, weights)
 ```
-The standard confidence is at `0.05, 0.025, 0.01`. Individual confidences can be defined with the parameter
+The standard confidence is at `0.01`. Individual confidences can be defined with the parameter
 `alpha`:
 ```python
-var = VaR(data, weights, alpha=[0.1, 0.05, 0.01])
+var = VaR(data, weights, alpha=0.05)
 var
 ```
 ```console
@@ -111,23 +111,15 @@ The `repr` of the class provides the following information:
 
 You can summarize the results of the different methods with the method:
 ```python
-var.summary()  # or use print(var)
+var.summary().round(2)  # or use print(var)
 ```
 ```console
-                      VaR(90.0)  VaR(95.0)  VaR(99.0)  CVaR(90.0)  CVaR(95.0)  \
-2021-07-11                                                                      
-Parametric            -0.107960  -0.114992  -0.130036   -0.133072   -0.142010   
-Historical            -0.148293  -0.172413  -0.203479   -0.180353   -0.211246   
-Monte Carlo           -0.108710  -0.115016  -0.129083   -0.117886   -0.123955   
-Stressed Monte Carlo  -0.146094  -0.150056  -0.158214   -0.151642   -0.155467   
-GARCH                 -0.037688  -0.263218  -0.442813   -0.067248   -0.442813   
-                      CVaR(99.0)  CDaR(90.0)  CDaR(95.0)  CDaR(99.0)  
-2021-07-11                                                            
-Parametric             -0.149269   -0.593583   -0.628195   -0.658899  
-Historical             -0.211246   -0.593583   -0.628195   -0.658899  
-Monte Carlo            -0.135459   -0.593583   -0.628195   -0.658899  
-Stressed Monte Carlo   -0.162193   -0.999779   -0.999879   -0.999910  
-GARCH                  -0.442813   -0.593583   -0.628195   -0.658899  
+                      VaR(0.99)  CVaR(0.99)  CDaR(0.99)
+2022-04-27                                             
+Parametric                -0.13       -0.15       -0.64
+Historical                -0.20       -0.21       -0.64
+Monte Carlo               -0.13       -0.14       -0.64
+Stressed Monte Carlo      -0.16       -0.17       -0.64
 ```
 
 You can access the different VaR methods by using the methods:
@@ -135,46 +127,38 @@ You can access the different VaR methods by using the methods:
 var.historic()
 ```
 ```console
-            VaR(90.0)  VaR(95.0)  VaR(99.0)  CVaR(90.0)  CVaR(95.0)  \
-2021-06-25  -0.148293  -0.172413  -0.203479   -0.180353   -0.211246   
-            CVaR(99.0)  CDaR(90.0)  CDaR(95.0)  CDaR(99.0)  
-2021-06-25   -0.211246   -0.593583   -0.628195   -0.658899 
+            VaR(0.99)  CVaR(0.99)
+2021-06-25  -0.203479   -0.211246
 ```
 ```python
 var.parametric()
 ```
 ```console
-            VaR(90.0)  VaR(95.0)  VaR(99.0)  CVaR(90.0)  CVaR(95.0)  \
-2021-06-25   -0.10796  -0.114992  -0.130036   -0.133072    -0.14201   
-            CVaR(99.0)  CDaR(90.0)  CDaR(95.0)  CDaR(99.0)  
-2021-06-25   -0.149269   -0.593583   -0.628195   -0.658899  
+            VaR(0.99)  CVaR(0.99)
+2021-06-25  -0.130036   -0.149269 
 ```
 ```python
 var.monte_carlo()
 ```
 ```console
-            VaR(90.0)  VaR(95.0)  VaR(99.0)  CVaR(90.0)  CVaR(95.0)  \
-2021-06-25  -0.107858  -0.113826  -0.127765   -0.116556   -0.122468   
-            CVaR(99.0)  CDaR(90.0)  CDaR(95.0)  CDaR(99.0)  
-2021-06-25    -0.13268   -0.593583   -0.628195   -0.658899  
+            VaR(0.99)  CVaR(0.99)
+2021-06-25  -0.132929    -0.13989 
 ```
 ```python
 var.monte_carlo(stressed=True)
 ```
 ```console
-            VaR(90.0)  VaR(95.0)  VaR(99.0)  CVaR(90.0)  CVaR(95.0)  \
-2021-06-25   -0.14644  -0.150529  -0.161256   -0.152076   -0.155756   
-            CVaR(99.0)  CDaR(90.0)  CDaR(95.0)  CDaR(99.0)  
-2021-06-25   -0.164127   -0.999779   -0.999879    -0.99991  
+            VaR(0.99)  CVaR(0.99)
+2021-06-25  -0.159149   -0.162875 
 ```
+
+Or access to the Conditional Drawdown at Risk with:
 ```python
-var.garch(stressed=True)
+var.cdar()
 ```
 ```console
-            VaR(90.0)  VaR(95.0)  VaR(99.0)  CVaR(90.0)  CVaR(95.0)  \
-2021-06-25  -0.037688  -0.263218  -0.442813   -0.067248   -0.442813   
-            CVaR(99.0)  CDaR(90.0)  CDaR(95.0)  CDaR(99.0)  
-2021-06-25   -0.442813   -0.593583   -0.628195   -0.658899    
+           CDaR(0.99)
+2021-06-25  -0.636892
 ```
 ### Backtest
 You can backtest the accuracy of each method with the method `backtest` and the method keys:
@@ -182,7 +166,6 @@ You can backtest the accuracy of each method with the method `backtest` and the 
 * 'p': VaR calculated with the parametric method,
 * 'mc': VaR calculated with the monte carlo method,
 * 'smv': VaR calculated with the stressed monte carlo method,
-* 'g': VaR calculated with the garch method.
 
 ```python
 bth = var.backtest(method='h')
@@ -196,23 +179,15 @@ Evaluate the backtest results with the method `evalutate`
 var.evaluate(bth)
 ```
 ```console
-             Amount   Percent Mean Deviation STD Deviation Min Deviation  \
-Observations   1008         1              0             0             0   
-VaR(90.0)        10  0.009921      -0.025198      0.027696     -0.004046   
-VaR(99.0)        10  0.009921      -0.025198      0.029195     -0.004046   
-CVaR(90.0)       10  0.009921      -0.023407       0.02708     -0.003382   
-CVaR(99.0)       10  0.009921      -0.023407      0.028545     -0.003382   
-CDaR(90.0)        5   0.00496      -0.024784      0.020734      -0.00414   
-CDaR(99.0)        2  0.001984      -0.043007      0.027027     -0.023896   
-             Max Deviation  
-Observations             0  
-VaR(90.0)        -0.102561  
-VaR(99.0)        -0.102561  
-CVaR(90.0)       -0.098803  
-CVaR(99.0)       -0.098803  
-CDaR(90.0)       -0.062118  
-CDaR(99.0)       -0.062118
-```
+           Amount   Percent Mean Deviation STD Deviation Min Deviation  \
+VaR(0.99)      10  0.009921      -0.023765      0.028671     -0.003515   
+CVaR(0.99)     10  0.009921      -0.023407      0.028545     -0.003382   
+CDaR(0.99)      6  0.005952      -0.017702       0.02285     -0.001713   
+
+           Max Deviation  
+VaR(0.99)      -0.099554  
+CVaR(0.99)     -0.098803  
+CDaR(0.99)     -0.060682  ```
 
 The table contains the following information:
 * Amount : Total amount of exceptions.
@@ -227,12 +202,12 @@ The table contains the following information:
 ### Plot Backtest
 Plot the backtest results via:
 ```python
-var.var_plot(bth)
+var.plot(bth, "var")
 ```
 ![img.png](resources/imgs/img.png)
 
 ```python
-var.cvar_plot(bth)
+var.plot(bth, "cvar")
 ```
 ![img.png](resources/imgs/img2.png)
 
@@ -261,4 +236,4 @@ it can be a temporary directory) and then run::
 # Dependencies
 
 * Python: Python 3.7
-* Packages: numpy, pandas, arch, scipy, matplotlib, tqdm, seaborn, numba
+* Packages: numpy, pandas, scipy, matplotlib, tqdm, seaborn, numba
