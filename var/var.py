@@ -76,18 +76,18 @@ class VaR:
     ----------
     alpha : number
         Displays the array where the confidence level is stored.
-    daily_return : data_frame
-        The parsed DataFrame object with the daily returns.
+    returns : data_frame
+        The parsed DataFrame object with the returns.
     weights : array_like
         Display the parsed weights.
     n : int
-        Length of the parameter `daily_return`.
+        Length of the parameter `return`.
     pnl : array_like
-        An array with the total daily mean values.
+        An array with the total mean values.
     info : dict
         A dict with general information about the parsed data:
-            * Daily Mean PnL (float): Total daily mean return. The mean of the variable `daily_pnl`.
-            * Daily Volatility (float) : Total daily volatility.  The std of the variable `daily_mean`.
+            * Mean PnL (float): Total mean return. The mean of the variable `daily_pnl`.
+            * Volatility (float) : Total Volatility.  The std of the variable `daily_mean`.
             * Portfolio Volatility: The std of the whole portfolio weighted by the parsed weights.
 
     References
@@ -96,14 +96,14 @@ class VaR:
     [investopedia](https://www.investopedia.com/articles/04/092904.asp)
     """
 
-    def __init__(self, daily_return, weights: array_like = None, alpha: number = 0.01) -> None:
+    def __init__(self, returns, weights: array_like = None, alpha: number = 0.01) -> None:
         """
         Initialize the Value-at-Risk class instance.
 
         Parameters
         ----------
-        daily_return : data_frame
-            A DataFrame object where the columns are the asset daily returns where the index is the corresponding date.
+        returns : data_frame
+            A DataFrame object where the columns are the asset returns where the index is the corresponding date.
         weights : array_like, optional
             An array with different weights corresponding to the assets. Default is 1.
         alpha : number, optional
@@ -111,7 +111,7 @@ class VaR:
 
         Notes
         -----
-        Note, that the length of the weights must the same as the amount of columns of the `daily_return` parameter.
+        Note, that the length of the weights must the same as the amount of columns of the `returns` parameter.
 
         """
         self.alpha = alpha
@@ -122,17 +122,17 @@ class VaR:
         self.header = [f"{item}({confidence})" for item in headers]
         self.header_exception = [item + " exception" for item in self.header]
 
-        self.daily_return = daily_return
+        self.returns = returns
         self.weights = np.array([1]) if weights is None else np.atleast_1d(weights)
-        self.n = self.daily_return.index.shape[0]
-        self.__max_date = self.daily_return.index.max()
-        self.pnl = pd.DataFrame(np.average(self.daily_return, 1, self.weights), index=self.daily_return.index,
-                                      columns=["Daily PnL"])
+        self.n = self.returns.index.shape[0]
+        self.__max_date = self.returns.index.max()
+        self.pnl = pd.DataFrame(np.average(self.returns, 1, self.weights), index=self.returns.index,
+                                      columns=["PnL"])
 
-        cov_matrix = self.daily_return.cov()
+        cov_matrix = self.returns.cov()
 
-        self.info = {"Daily Mean PnL": np.mean(self.pnl.values),
-                     "Daily Volatility": np.std(self.pnl.values),
+        self.info = {"Mean PnL": np.mean(self.pnl.values),
+                     "Volatility": np.std(self.pnl.values),
                      "Portfolio Volatility": np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))}
 
     # ----------------------------------------------------------------------------------------------
@@ -142,10 +142,10 @@ class VaR:
         head = "<VaR - {mu}: {mu_val}%, {sigma}: {sigma_val}%, " \
                "Portfolio {sigma}: {port_sigma_val}%>".format(mu=chr(956),
                                                               mu_val=round(
-                                                                  self.info["Daily Mean PnL"] * 100, 2),
+                                                                  self.info["Mean PnL"] * 100, 2),
                                                               sigma=chr(963),
                                                               sigma_val=round(
-                                                                  self.info["Daily Volatility"] * 100, 4),
+                                                                  self.info["Volatility"] * 100, 4),
                                                               port_sigma_val=round(self.info["Portfolio Volatility"] * 100, 4))
 
         return head
@@ -321,7 +321,7 @@ class VaR:
         Returns
         -------
         out : data_frame
-            A DataFrame object with Daily PnL, VaR and VaR exception values.
+            A DataFrame object with PnL, VaR and VaR exception values.
         """
         method_applied = __METHODS__[method]
         kwargs = {"pnl": None, "alpha": self.alpha}
@@ -337,13 +337,13 @@ class VaR:
 
         var_dict = dict()
         for i in trange(self.n - window_days, desc=desc, leave=True):
-            daily_return_sample = self.daily_return[i:i + window_days]
+            daily_return_sample = self.returns[i:i + window_days]
 
             daily_pnl = np.average(daily_return_sample, 1, self.weights)
 
             if method == "smc":
                 kwargs["pnl"] = pd.DataFrame(daily_pnl, index=daily_return_sample.index,
-                                             columns=["Daily PnL"]).resample('W').min().dropna().values
+                                             columns=["PnL"]).resample('W').min().dropna().values
 
             elif method == "p":
                 kwargs["pnl"] = daily_pnl
@@ -369,13 +369,13 @@ class VaR:
 
         df = df.apply(pd.to_numeric)
 
-        df[self.header_exception[0]] = np.where(df['Daily PnL'] < df[self.header[0]],
+        df[self.header_exception[0]] = np.where(df['PnL'] < df[self.header[0]],
                                                 'True', 'False')
 
-        df[self.header_exception[1]] = np.where(df['Daily PnL'] < df[self.header[1]],
+        df[self.header_exception[1]] = np.where(df['PnL'] < df[self.header[1]],
                                                 'True', 'False')
 
-        df[self.header_exception[2]] = np.where(df['Daily PnL'] < df[self.header[2]],
+        df[self.header_exception[2]] = np.where(df['PnL'] < df[self.header[2]],
                                                 'True', 'False')
 
         df = df.dropna()
@@ -412,7 +412,7 @@ class VaR:
         observations = len(table)
 
         tmp_exc = [table[table[item] == 'True'] for item in self.header_exception]
-        tmp_dev = [item['Daily PnL'] - item[self.header[i]] for i, item in enumerate(tmp_exc)]
+        tmp_dev = [item['PnL'] - item[self.header[i]] for i, item in enumerate(tmp_exc)]
 
         try:
             tmp_stat = list()
@@ -480,11 +480,11 @@ class VaR:
 
         fig, ax = plt.subplots(1, 1, figsize=figsize)
 
-        ax.plot(table['Daily PnL'], color='#003049')
+        ax.plot(table['PnL'], color='#003049')
 
         ax.plot(table[self.header[c]], "-.", color='#9d0208', alpha=0.7)
 
-        exceed_0 = table[table[self.header_exception[c]] == 'True']['Daily PnL']
+        exceed_0 = table[table[self.header_exception[c]] == 'True']['PnL']
 
         ax.scatter(exceed_0.index, exceed_0, marker='x', facecolors='#9d0208', s=120)
 
@@ -493,7 +493,7 @@ class VaR:
         ax.spines['right'].set_visible(False)
         ax.spines['left'].set_visible(False)
 
-        ax.legend(['Daily PnL',
+        ax.legend(['PnL',
                    self.header[c],
                    "Exceptions"],
                   loc='upper left', prop={'size': 12})
