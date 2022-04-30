@@ -10,13 +10,14 @@ Setup of VaR Package
 from setuptools import find_packages
 from setuptools import setup
 
-try:
-    import pypandoc
+# try:
+#     import pypandoc
 
-    long_description = pypandoc.convert('README_PYPI.md', 'rst')
-except(IOError, ImportError):
-    long_description = open('README_PYPI.md').read()
+#     long_description = pypandoc.convert('README_PYPI.md', 'rst')
+# except(IOError, ImportError):
+#     long_description = open('README_PYPI.md').read()
 
+long_description = open('README.md').read()
 
 def get_packages():
     find_packages(exclude=['docs']),
@@ -55,6 +56,7 @@ setup(name='var',
       author_email='i.baris@outlook.de',
       url='https://github.com/ibaris/VaR',
       long_description=long_description,
+      long_description_content_type='text/markdown',
 
       # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
       classifiers=[
@@ -62,7 +64,11 @@ setup(name='var',
           'Intended Audience :: Developers',
           'Intended Audience :: Education',
           'Intended Audience :: End Users/Desktop',
+          'Intended Audience :: Financial and Insurance Industry',
+          'Office/Business :: Financial :: Investment',
+          'Programming Language :: Python :: 3.6',
           'Programming Language :: Python :: 3.7',
+          'Programming Language :: Python :: 3.8',
           'Operating System :: Microsoft',
 
       ],

@@ -187,7 +187,8 @@ CDaR(0.99)      6  0.005952      -0.017702       0.02285     -0.001713
            Max Deviation  
 VaR(0.99)      -0.099554  
 CVaR(0.99)     -0.098803  
-CDaR(0.99)     -0.060682  ```
+CDaR(0.99)     -0.060682  
+```
 
 The table contains the following information:
 * Amount : Total amount of exceptions.
