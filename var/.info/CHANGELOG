@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Delete
 - Delete the GARCH model. It was very unstable and generated many `NaN` results.
 - Delete multi `alpha` support in the `Var` class. It caused multiple problems.
+- Delete the term `daily` in the `VaR` class, since you can use every horizon.
 
 ## [0.0.5] - 2021-07-11
 ### Changed
