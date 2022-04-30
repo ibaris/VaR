@@ -165,7 +165,7 @@ You can backtest the accuracy of each method with the method `backtest` and the 
 * 'h': VaR calculated with the historical method,
 * 'p': VaR calculated with the parametric method,
 * 'mc': VaR calculated with the monte carlo method,
-* 'smv': VaR calculated with the stressed monte carlo method,
+* 'smc': VaR calculated with the stressed monte carlo method,
 
 ```python
 bth = var.backtest(method='h')
