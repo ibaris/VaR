@@ -49,7 +49,7 @@ setup(name='var',
       version=get_version(),
       description='Different Methods to Estimate the Value-at-Risk of a portfolio.',
       packages=get_packages(),
-
+      install_requires=required,
       author="Ismail Baris",
       maintainer='Ismail Baris',
       author_email='i.baris@outlook.de',
