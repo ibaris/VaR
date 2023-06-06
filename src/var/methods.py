@@ -42,7 +42,7 @@ def historic(pnl, alpha):
     [investopedia](https://www.investopedia.com/articles/04/092904.asp)
 
     """
-    var_values = np.percentile(pnl, alpha)
+    var_values = np.percentile(pnl, alpha * 100, interpolation="lower")
     cvar_values = [np.mean(pnl[pnl <= item]) for item in var_values]
     cdar_values = cdar(pnl, alpha)
     data = np.concatenate((var_values, cvar_values, cdar_values))
@@ -116,7 +116,7 @@ def monte_carlo(pnl, alpha):
 
     PnL_list = np.random.normal(np.mean(pnl), np.std(pnl), 100000)
 
-    var_values = np.percentile(PnL_list, alpha)
+    var_values = np.percentile(PnL_list, alpha * 100, interpolation="lower")
     pnl_frame = [PnL_list[PnL_list <= item] for item in var_values]
     cvar_values = [np.nanmean(item) for item in pnl_frame]
     cdar_values = cdar(pnl, alpha)
@@ -159,7 +159,7 @@ def monte_carlo_stressed(pnl, alpha):
     loc, scale = gumbel_r.fit(pnl)
     pnl_list = np.random.gumbel(loc, scale, 100000)
 
-    var_values = np.percentile(pnl_list, alpha)
+    var_values = np.percentile(pnl_list, alpha * 100, interpolation="lower")
     pnl_frame = [pnl_list[pnl_list <= item] for item in var_values]
     cvar_values = [np.nanmean(item) for item in pnl_frame]
     cdar_values = cdar(pnl, alpha)

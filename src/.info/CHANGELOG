@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2023.6.1] - 2023-06-06
+Fix issue with percentile computation
+
+### Add 
+- New project structure
+- Add bumbver to project
+
+### Fix
+- Fix issue with percentile computation (Thank you @Osman Mahmud Kim )
+  
+## [0.1.0] - 2022-04-27
+(Breaking Changes)
+### Add
+- Add typing to the functions and classes.
+
+## Changed
+- Changed the `plot` method in the `Var` class.
+
+## Delete
+- Delete the GARCH model. It was very unstable and generated many `NaN` results.
+- Delete multi `alpha` support in the `Var` class. It caused multiple problems.
+- Delete the term `daily` in the `VaR` class, since you can use every horizon.
+
 ## [0.0.5] - 2021-07-11
 ### Changed
 - Add missing files to the distribution (Thank you @Pablo Bartol):

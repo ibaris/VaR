@@ -321,17 +321,17 @@ class VaR:
         out : pd.DataFrame
             A DataFrame object with Daily PnL, VaR and VaR exception values.
         """
+        if method not in __METHODS__.keys():
+            raise ValueError(f"Method {method} not understood. Available methods are 'h' ('historical'), 'p' ('parametric'), "
+                             "'mc' ('monte carlo'), 'smv' ('stressed monte carlo') and 'g' ('garch').")
+
         method_applied = __METHODS__[method]
         kwargs = {"pnl": None, "alpha": self.alpha}
-
-        if method not in __METHODS__.keys():
-            raise ValueError("Method {0} not understood. Available methods are 'h' ('historical'), 'p' ('parametric'), "
-                             "'mc' ('monte carlo'), 'smv' ('stressed monte carlo') and 'g' ('garch').".format(method))
 
         function_name = method_applied.__name__
         str_method = function_name.replace("_", " ").title()
 
-        desc = "Backtest: {method} Method".format(method=str_method)
+        desc = f"Backtest: {str_method} Method"
 
         var_dict = dict()
         for i in trange(self.n - window_days, desc=desc, leave=True):

@@ -2,4 +2,3 @@ recursive-include var/data *
 recursive-include var/.version *
 recursive-include var/.info *
 include requirements.txt
-include README_PYPI.md

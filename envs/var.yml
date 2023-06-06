@@ -1,0 +1,28 @@
+name: var
+channels:
+  - defaults
+  - anaconda
+  - conda-forge
+dependencies:
+  - python=3.9
+  - defaults::numpy
+  - defaults::scipy
+  - conda-forge::pre-commit
+  - pandas
+  - jupyter
+  - jupyterlab
+  - psutil
+  - sphinx
+  - numba
+  - pip
+  - pip:
+      - pyyaml
+      - tox
+      - yapf
+      - pylint
+      - pycodestyle
+      - bumpver
+      - arch
+      - matplotlib
+      - tqdm
+      - seaborn

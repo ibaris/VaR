@@ -10,9 +10,16 @@ HEADER
 import os
 
 import pandas as pd
+import numpy as np
+from typing import List, Union
 
-__all__ = ["load_data"]
+__all__ = ["load_data", "number", "array_like", "data_frame", "number_like"]
 __PATH__ = os.path.join(os.path.dirname(__file__), "data", "data.csv")
+
+number = Union[int, float]
+number_like = Union[List[number], number]
+array_like = Union[List[number], np.ndarray]
+data_frame = pd.DataFrame
 
 
 def load_data():
@@ -28,4 +35,3 @@ def load_data():
     data = data.set_index("Date")
 
     return data / 100
-
