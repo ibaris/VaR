@@ -1,0 +1,24 @@
+[build-system]
+requires = [
+    "setuptools>=30.3.0",
+    "wheel",
+]
+
+[tool.bumpver]
+current_version = "2023.6.1"
+version_pattern = "YYYY.MM.PATCH"
+commit_message = "ver(VaR): bump version from {old_version} -> {new_version}"
+commit = true
+tag = true
+push = true
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = [
+    'current_version = "{version}"',
+]
+"setup.py" = [
+    "{version}",
+]
+"src/var/__init__.py" = [
+    "{version}",
+]
