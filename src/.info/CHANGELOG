@@ -13,7 +13,7 @@ Fix issue with percentile computation
 - Add bumbver to project
 
 ### Fix
-- Fix issue with percentile computation
+- Fix issue with percentile computation (Thank you @Osman Mahmud Kim )
   
 ## [0.1.0] - 2022-04-27
 (Breaking Changes)
