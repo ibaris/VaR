@@ -39,7 +39,7 @@ with open('requirements.txt', encoding="utf-8") as f:
 
 setup(
     name='var',
-    version="2023.6.1",
+    version="2023.6.2",
     description='Different Methods to Estimate the Value-at-Risk of a portfolio.',
     packages=find_packages('src'),
     package_dir={'': 'src'},
