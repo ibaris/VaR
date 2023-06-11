@@ -203,12 +203,12 @@ The table contains the following information:
 ### Plot Backtest
 Plot the backtest results via:
 ```python
-var.plot(bth, "var")
+var.var_plot(bth)
 ```
 ![img.png](resources/imgs/img.png)
 
 ```python
-var.plot(bth, "cvar")
+var.cvar_plot(bth)
 ```
 ![img.png](resources/imgs/img2.png)
 
