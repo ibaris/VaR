@@ -74,6 +74,7 @@ def parametric(pnl, alpha, daily_std):
     ----------
     [Risk.net](https://www.risk.net/definition/value-at-risk-var)
     """
+    # See [here](https://stackoverflow.com/questions/60699836/how-to-use-norm-ppf)
     z_values = norm.ppf((1 - alpha) / 100)
 
     var_values = np.mean(pnl) + z_values * daily_std
