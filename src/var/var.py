@@ -58,9 +58,10 @@ pd.set_option('display.max_rows', 15)
 # ----------------------------------------------------------------------------------------------
 # Value at Risk Class
 # ----------------------------------------------------------------------------------------------
+#pylint: disable=too-many-instance-attributes
 class VaR:
     """
-    The class to estimate the Value at Risk (VaR), Conditional Value at Risk (CVaR) and the Conditional Drawdown at risk. The
+    The class to estimate the Value at Risk (VaR), Conditional Value at Risk or Expected Shortfall (ES) and the Conditional Drawdown at risk. The
     VaR can be calculated using different techniques like:
         * Parametric Method
         * Historical Method
@@ -122,7 +123,7 @@ class VaR:
             raise AssertionError("The amount of alpha should be 3.")
 
         confidence = 1 - self.alpha
-        headers = ["VaR", "CVaR", "CDaR"]
+        headers = ["VaR", "ES", "CDaR"]
 
         self.header = list()
         for i in range(len(headers)):
@@ -393,8 +394,8 @@ class VaR:
         -------
         out : pd.DataFrame
             A DataFrame object with following columns:
-                * Amount : The Amount of the Observations or the VaR and CVaR exceptions.
-                * Amount in Percent : The Amount of the Observations or the VaR and CVaR exceptions in percent.
+                * Amount : The Amount of the Observations or the VaR and ES exceptions.
+                * Amount in Percent : The Amount of the Observations or the VaR and ES exceptions in percent.
                 * Mean Deviation : The Mean Deviation of the exceptions (Actual - Expected).
                 * STD Deviation : The Standard Deviation of the exceptions.
                 * Min Deviation : The Min Deviation of the exceptions. This means the worst overestimation.
@@ -512,7 +513,7 @@ class VaR:
         plt.tight_layout()
         plt.show()
 
-    def cvar_plot(self, backtest_data, begin_date=None, end_date=None):
+    def es_plot(self, backtest_data, begin_date=None, end_date=None):
         """
         Plot the Conditional Value at Risk backtest data.
 
@@ -558,7 +559,7 @@ class VaR:
         ax.spines['top'].set_color('#b0abab')
         ax.spines['right'].set_visible(False)
         ax.spines['left'].set_visible(False)
-        ax.set_title(table.index.name + ' CVaR Backtest', fontsize=16, fontweight=1)
+        ax.set_title(table.index.name + ' ES Backtest', fontsize=16, fontweight=1)
 
         ax.legend(['Daily PnL',
                    header_list[0],

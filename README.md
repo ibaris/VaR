@@ -114,7 +114,7 @@ You can summarize the results of the different methods with the method:
 var.summary().round(2)  # or use print(var)
 ```
 ```console
-                      VaR(0.99)  CVaR(0.99)  CDaR(0.99)
+                      VaR(0.99)  CVaR(0.99)  ES(0.99)
 2022-04-27                                             
 Parametric                -0.13       -0.15       -0.64
 Historical                -0.20       -0.21       -0.64
@@ -154,10 +154,10 @@ var.monte_carlo(stressed=True)
 
 Or access to the Conditional Drawdown at Risk with:
 ```python
-var.cdar()
+var.es()
 ```
 ```console
-           CDaR(0.99)
+           ES(0.99)
 2021-06-25  -0.636892
 ```
 ### Backtest
