@@ -51,7 +51,7 @@ def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray
 
     return es_values
 
-
+@jit(cache=True)
 def compute_cdar(pnl: array_like, var: array_like) -> np.ndarray:
     """Compute the Drawdown of a portfolio
 
@@ -247,6 +247,3 @@ def garch(pnl, alpha):
     data = np.concatenate((var_values, es_values, cdar_values))
 
     return data
-
-
-__METHODS__ = {"h": historic, "p": parametric, "mc": monte_carlo, "g": garch}
