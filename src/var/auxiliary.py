@@ -11,15 +11,33 @@ import os
 
 import pandas as pd
 import numpy as np
-from typing import List, Union
+from typing import List, Union, Literal
+from scipy import stats
 
 __all__ = ["load_data", "number", "array_like", "data_frame", "number_like"]
 __PATH__ = os.path.join(os.path.dirname(__file__), "data", "data.csv")
+
+__DISTRIBUTIONS__ = {
+    'cauchy': stats.cauchy,
+    'chi2': stats.chi2,
+    'expon': stats.expon,
+    'exponpow': stats.exponpow,
+    'gamma': stats.gamma,
+    'lognorm': stats.lognorm,
+    'norm': stats.norm,
+    'powerlaw': stats.powerlaw,
+    'rayleigh': stats.rayleigh,
+    'uniform': stats.uniform,
+    't': stats.t,
+    "gumbel_r": stats.gumbel_r
+}
 
 number = Union[int, float]
 number_like = Union[List[number], number]
 array_like = Union[List[number], np.ndarray]
 data_frame = pd.DataFrame
+distributions = Literal["chauchy", "chi2", "expon", "exponpow", "gamma", "lognorm", "norm", "powerlaw", "rayleigh",
+                        "uniform", "t", "gumbel_r", "auto"]
 
 
 def load_data():
