@@ -24,7 +24,7 @@ import logging
 import re
 import time
 import warnings
-from typing import Union
+from typing import Union, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -312,7 +312,7 @@ class VaR:
         summary.index.name = time.strftime("%Y-%m-%d")
         return summary
 
-    def backtest(self, method, window_days=250):
+    def backtest(self, method: str, window_days: int = 250):
         """
         Generate the Backtest data.
 
@@ -323,7 +323,6 @@ class VaR:
                 * 'h': VaR calculated with the historical method,
                 * 'p': VaR calculated with the parametric method,
                 * 'mc': VaR calculated with the monte carlo method,
-                * 'smv': VaR calculated with the stressed monte carlo method,
                 * 'g': VaR calculated with the garch method.
         window_days : int
             Backtest horizon in days.
@@ -444,6 +443,100 @@ class VaR:
             df.iloc[i] = [amount[i], percentages[i], mean_values, std_values, min_values, max_values]
 
         return df
+
+    def compute_pelve(self, method: str, alpha: float = 0.01) -> Tuple[float, float]:
+        """
+        PELVE is intended to help decide what confidence level to use when replacing Value at Risk (VaR) 
+        with Expected Shortfall (ES) in risk assessments.
+        PELVE is essentially a ratio or a multiplier. It tells us how to adjust the confidence 
+        level when switching from VaR to ES so that we get an equivalent measure of risk. The formula 
+        for calculating PELVE is ES_{1−cɛ}(X)=V aR_{1−ɛ}(X), where ε is a small number close to 0, X is 
+        a loss random variable, and c is the PELVE.
+
+        The idea here is to answer the question: if we replace VaR with ES in our risk models, how will
+        that affect our estimated capital requirements? Will we need more capital to cover potential 
+        losses, or less?
+
+        Parameters
+        ----------
+        method : str
+           Define a VaR calculation method:
+                * 'h': VaR calculated with the historical method,
+                * 'p': VaR calculated with the parametric method,
+                * 'mc': VaR calculated with the monte carlo method,
+                * 'g': VaR calculated with the garch method.
+        alpha : float, optional
+            Significance level, by default 0.01
+
+        Returns
+        -------
+        Tuple[float, float]
+            PELVE and the optimization error.
+
+        Raises
+        ------
+        ValueError
+            If method not present.
+        
+        Note
+        ----
+        I already tried to avoid a grid search like this but scipy optimize functions where not able to
+        minimize the function.
+
+        Thank you Osman Mahmud Kim for pointing the PELVE out.
+
+        See Also
+        --------
+        [PELVE: Probability Equivalent Level of VaR and ES](https://www.sciencedirect.com/science/article/pii/S0304407622000380)
+
+        """
+        if method not in __METHODS__:
+            raise ValueError(
+                f"Method {method} not understood. Available methods are 'h' ('historical'), 'p' ('parametric'), "
+                "'mc' ('monte carlo'), 'smv' ('stressed monte carlo') and 'g' ('garch').")
+
+        method_applied = __METHODS__[method]
+        alpha = np.array([alpha])
+
+        kwargs = {}
+        if method == "p":
+            kwargs = {"daily_std": self.info["Portfolio Volatility"]}
+
+        def es_minus_var(es_cl, returns, var_cl):
+            """
+            Calculate the difference between ES at a given confidence level and VaR at another confidence level.
+            """
+            target_es = method_applied(pnl=returns, alpha=es_cl, **kwargs)[1]
+            var = method_applied(pnl=returns, alpha=var_cl, **kwargs)[0]
+            return abs(target_es - var)
+
+        num_points = 10000  # The number of points in the grid.
+        points = np.linspace(0.00001, 1, num_points)
+
+        min_difference = float('inf')  # Start with a very large minimum difference.
+        optimal_es_confidence_level = 0
+
+        returns = self.pnl.values.flatten()
+        atol = 2 if method == "mc" else 6
+
+        # Loop over the grid points.
+        for i in trange(num_points):
+            es_confidence_level = np.array([points[i]])  # Compute the ES confidence level for this grid point.
+            difference = es_minus_var(es_confidence_level, returns,
+                                      alpha)  # Compute the difference for this grid point.
+
+            # If this difference is less than the current minimum, update the minimum and remember this ES confidence level.
+            if difference < min_difference:
+                min_difference = difference
+                optimal_es_confidence_level = es_confidence_level
+
+            if round(difference, atol) > round(min_difference, atol):
+                break
+
+        # The PELVE is the ratio of the optimal ES confidence level to the VaR confidence level.
+        pelve = optimal_es_confidence_level / alpha
+
+        return pelve, min_difference
 
     def var_plot(self, backtest_data, begin_date=None, end_date=None):
         """
