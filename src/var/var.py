@@ -24,7 +24,7 @@ import logging
 import re
 import time
 import warnings
-from typing import Union, Tuple
+from typing import Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,11 +32,15 @@ import pandas as pd
 import seaborn as sns
 from arch.utility.exceptions import ConvergenceWarning
 from tqdm import trange
-
+from scipy.optimize import dual_annealing
 from var.auxiliary import array_like
-from var.methods import __METHODS__, garch, historic, monte_carlo, parametric
+from var.methods import garch, historic, monte_carlo, parametric
+from var import objectives
 
 __all__ = ["VaR"]
+
+__METHODS__ = {"h": historic, "p": parametric, "mc": monte_carlo, "g": garch}
+__PELVE_OBJECTIVES__ = {"h": objectives.pelve_historic, "p": objectives.pelve_parameteric}
 
 # ----------------------------------------------------------------------------------------------
 # Environmental Settings
@@ -450,7 +454,7 @@ class VaR:
         with Expected Shortfall (ES) in risk assessments.
         PELVE is essentially a ratio or a multiplier. It tells us how to adjust the confidence 
         level when switching from VaR to ES so that we get an equivalent measure of risk. The formula 
-        for calculating PELVE is ES_{1−cɛ}(X)=V aR_{1−ɛ}(X), where ε is a small number close to 0, X is 
+        for calculating PELVE is ES_{1-cɛ}(X)=V aR_{1-ɛ}(X), where ε is a small number close to 0, X is 
         a loss random variable, and c is the PELVE.
 
         The idea here is to answer the question: if we replace VaR with ES in our risk models, how will
@@ -463,8 +467,6 @@ class VaR:
            Define a VaR calculation method:
                 * 'h': VaR calculated with the historical method,
                 * 'p': VaR calculated with the parametric method,
-                * 'mc': VaR calculated with the monte carlo method,
-                * 'g': VaR calculated with the garch method.
         alpha : float, optional
             Significance level, by default 0.01
 
@@ -491,52 +493,54 @@ class VaR:
 
         """
         if method not in __METHODS__:
+            raise ValueError(f"Method {method} not understood. Available methods are {list(__METHODS__.keys())}")
+
+        if method not in __PELVE_OBJECTIVES__:
             raise ValueError(
-                f"Method {method} not understood. Available methods are 'h' ('historical'), 'p' ('parametric'), "
-                "'mc' ('monte carlo'), 'smv' ('stressed monte carlo') and 'g' ('garch').")
+                f"Method {method} not available for PELVE. Available methods are {list(__PELVE_OBJECTIVES__.keys())}")
 
         method_applied = __METHODS__[method]
+        pelve_applied = __PELVE_OBJECTIVES__[method]
+
         alpha = np.array([alpha])
 
-        kwargs = {}
+        kwargs = {'pnl': self.pnl.values.flatten(), 'alpha': alpha}
+
         if method == "p":
-            kwargs = {"daily_std": self.info["Portfolio Volatility"]}
+            kwargs.update({"daily_std": self.info["Portfolio Volatility"]})
 
-        def es_minus_var(es_cl, returns, var_cl):
-            """
-            Calculate the difference between ES at a given confidence level and VaR at another confidence level.
-            """
-            target_es = method_applied(pnl=returns, alpha=es_cl, **kwargs)[1]
-            var = method_applied(pnl=returns, alpha=var_cl, **kwargs)[0]
-            return abs(target_es - var)
+        var_value = method_applied(**kwargs)[0]
 
-        num_points = 10000  # The number of points in the grid.
-        points = np.linspace(0.00001, 1, num_points)
+        # Compute Objective Function =======================================================
+        _ = kwargs.pop("alpha")  # Remove alpha from kwargs since it is not needed anymore.
+        kwargs["var_value"] = var_value
 
-        min_difference = float('inf')  # Start with a very large minimum difference.
-        optimal_es_confidence_level = 0
+        objective = pelve_applied(**kwargs)
 
-        returns = self.pnl.values.flatten()
-        atol = 2 if method == "mc" else 6
+        # Apply the Dual Annealing Algorithm ===============================================
+        # Define the bounds for es_confidence_level.
+        bounds = [(0, 1)]
 
-        # Loop over the grid points.
-        for i in trange(num_points):
-            es_confidence_level = np.array([points[i]])  # Compute the ES confidence level for this grid point.
-            difference = es_minus_var(es_confidence_level, returns,
-                                      alpha)  # Compute the difference for this grid point.
+        # Call dual_annealing to minimize the objective function.
+        result = dual_annealing(objective, bounds, x0=[0.025])
 
-            # If this difference is less than the current minimum, update the minimum and remember this ES confidence level.
-            if difference < min_difference:
-                min_difference = difference
-                optimal_es_confidence_level = es_confidence_level
-
-            if round(difference, atol) > round(min_difference, atol):
-                break
+        # Extract the optimal es_confidence_level from the result.
+        optimal_es_confidence_level = result.x[0]
 
         # The PELVE is the ratio of the optimal ES confidence level to the VaR confidence level.
         pelve = optimal_es_confidence_level / alpha
 
-        return pelve, min_difference
+        # Compute Error ====================================================================
+        kwargs = {'pnl': self.pnl.values.flatten(), 'alpha': np.array([optimal_es_confidence_level])}
+
+        if method == "p":
+            kwargs.update({"daily_std": self.info["Portfolio Volatility"]})
+
+        es_value = method_applied(**kwargs)[1]
+
+        difference = np.abs(var_value - es_value)
+
+        return pelve, difference
 
     def var_plot(self, backtest_data, begin_date=None, end_date=None):
         """
