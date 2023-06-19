@@ -92,6 +92,16 @@ class VaR:
             * Portfolio Volatility: The std of the whole portfolio weighted by the parsed weights.
     methods : list
         A list with available test methods.
+    header : list
+        A list with the header of the DataFrame object.
+    header_exception : list
+        A list with the header of the DataFrame object for the exception.
+    _portfolio_volatility : float
+        The portfolio volatility.
+    _mean_pnl : float
+        The daily mean.
+    _volatility : float
+        The daily volatility.
 
     References
     ----------
@@ -150,10 +160,14 @@ class VaR:
 
         cov_matrix = self.returns.cov()
 
+        self._portfolio_volatility = np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))
+        self._mean_pnl = np.mean(self.pnl.values)
+        self._volatility = np.std(self.pnl.values)
+
         self.info = {
-            "Mean PnL": np.mean(self.pnl.values),
-            "Volatility": np.std(self.pnl.values),
-            "Portfolio Volatility": np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))
+            "Mean PnL": self._mean_pnl,
+            "Volatility": self._volatility,
+            "Portfolio Volatility": self._portfolio_volatility
         }
 
         self.methods = list(__METHODS__.keys())
@@ -164,10 +178,10 @@ class VaR:
     def __repr__(self):
         head = "<VaR - {mu}: {mu_val}%, {sigma}: {sigma_val}%, " \
                "Portfolio {sigma}: {port_sigma_val}%>".format(mu=chr(956),
-                                                              mu_val=round(self.info["Mean PnL"] * 100, 2),
+                                                              mu_val=round(self._mean_pnl * 100, 2),
                                                               sigma=chr(963),
-                                                              sigma_val=round(self.info["Volatility"] * 100, 4),
-                                                              port_sigma_val=round(self.info["Portfolio Volatility"] * 100, 4))
+                                                              sigma_val=round(self._volatility * 100, 4),
+                                                              port_sigma_val=round(self._portfolio_volatility * 100, 4))
 
         return head
 
@@ -223,7 +237,7 @@ class VaR:
         ----------
         [Risk.net](https://www.risk.net/definition/value-at-risk-var)
         """
-        data = parametric(pnl=self.pnl.values, alpha=self.alpha, daily_std=self.info["Portfolio Volatility"])
+        data = parametric(pnl=self.pnl.values, alpha=self.alpha, daily_std=self._portfolio_volatility)
 
         df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
@@ -507,7 +521,7 @@ class VaR:
         kwargs = {'pnl': self.pnl.values.flatten(), 'alpha': alpha}
 
         if method == "p":
-            kwargs.update({"daily_std": self.info["Portfolio Volatility"]})
+            kwargs.update({"daily_std": self._portfolio_volatility})
 
         var_value = method_applied(**kwargs)[0]
 
@@ -534,7 +548,7 @@ class VaR:
         kwargs = {'pnl': self.pnl.values.flatten(), 'alpha': np.array([optimal_es_confidence_level])}
 
         if method == "p":
-            kwargs.update({"daily_std": self.info["Portfolio Volatility"]})
+            kwargs.update({"daily_std": self._portfolio_volatility})
 
         es_value = method_applied(**kwargs)[1]
 
