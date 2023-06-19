@@ -18,8 +18,7 @@ from var.auxiliary import array_like
 
 __all__ = ["historic", "parametric", "monte_carlo", "garch"]
 
-
-# @jit(cache=True)
+@jit(cache=True)
 def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray:
     """ Compute the expected Shortfall
 
@@ -112,7 +111,7 @@ def historic(pnl: array_like, alpha: array_like) -> np.ndarray:
     return data
 
 
-# @jit(cache=True)
+@jit(cache=True)
 def parametric(pnl: array_like, alpha: array_like, daily_std: float) -> np.ndarray:
     """
     Under the parametric method, also known as variance-covariance method, VAR is calculated as a function of mean
@@ -151,7 +150,7 @@ def parametric(pnl: array_like, alpha: array_like, daily_std: float) -> np.ndarr
     return data
 
 
-# @jit(cache=True)
+@jit(cache=True)
 def monte_carlo(
     pnl: array_like,
     alpha: array_like,
