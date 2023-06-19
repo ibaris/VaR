@@ -7,17 +7,10 @@ Setup of VaR Package
 *For COPYING and LICENSE details, please refer to the LICENSE file*
 
 """
-import io
-import os
-import platform
 from glob import glob
-from os.path import basename
-from os.path import dirname
-from os.path import join
-from os.path import relpath
-from os.path import splitext
-from setuptools import find_packages
-from setuptools import setup
+from os.path import basename, splitext
+
+from setuptools import find_packages, setup
 
 long_description = """"The search for appropriate risk measuring methodologies has been followed by increased financial uncertainty worldwide. Financial
 turmoil and the increased volatility of financial markets have induced the design and development of more sophisticated tools for
