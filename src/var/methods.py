@@ -11,14 +11,14 @@ import warnings
 
 import numpy as np
 from arch import arch_model
-from numba import jit
-from scipy.stats import norm
+# from numba import jit
+from scipy import stats
 
 from var.auxiliary import array_like
 
 __all__ = ["historic", "parametric", "monte_carlo", "garch"]
 
-@jit(cache=True)
+# @jit(cache=True)
 def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray:
     """ Compute the expected Shortfall
 
@@ -51,7 +51,7 @@ def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray
 
     return es_values
 
-@jit(cache=True)
+# @jit(cache=True)
 def compute_cdar(pnl: array_like, var: array_like) -> np.ndarray:
     """Compute the Drawdown of a portfolio
 
@@ -72,13 +72,14 @@ def compute_cdar(pnl: array_like, var: array_like) -> np.ndarray:
     drawdown_values = np.zeros_like(var)
 
     for i, item in enumerate(var):
-        drawdown_values[i] = drawdowns[drawdowns > item].mean()
+        drawdown_values[i] = np.nanmean(drawdowns[drawdowns > item])
+
+    drawdown_values = np.nan_to_num(drawdown_values)
 
     return drawdown_values
 
 
-@jit(cache=True)
-def historic(pnl: array_like, alpha: array_like) -> np.ndarray:
+def historic(pnl: array_like, alpha: array_like, **kwargs) -> np.ndarray:
     """
     The historical method simply re-organizes actual historical returns, putting them in order from worst to best.
     It then assumes that history will repeat itself, from a risk perspective.
@@ -111,8 +112,7 @@ def historic(pnl: array_like, alpha: array_like) -> np.ndarray:
     return data
 
 
-@jit(cache=True)
-def parametric(pnl: array_like, alpha: array_like, daily_std: float) -> np.ndarray:
+def parametric(pnl: array_like, alpha: array_like, daily_std: float, ppf: callable = stats.norm.ppf, **kwargs) -> np.ndarray:
     """
     Under the parametric method, also known as variance-covariance method, VAR is calculated as a function of mean
     and variance of the returns series, assuming normal distribution.
@@ -125,6 +125,8 @@ def parametric(pnl: array_like, alpha: array_like, daily_std: float) -> np.ndarr
         A list significance levels (alpha values) for VaR.
     daily_std : float
         Daily Standard Deviation of the portfolio.
+    ppf : callable
+        Percent point function (inverse of cdf — percentiles). Default is `stats.norm.ppf`.
 
     Returns
     -------
@@ -139,7 +141,7 @@ def parametric(pnl: array_like, alpha: array_like, daily_std: float) -> np.ndarr
     # If you're interested in a 99% confidence interval (one tail), you will feed ppf with 0.99.
     # If it's a two-tailed test, you would provide 0.995 for the upper tail and 0.005 for the lower
     # tail (for a 99% confidence interval).
-    z_values = norm.ppf(alpha)
+    z_values = ppf(alpha, **kwargs)
 
     var_values = np.mean(pnl) + z_values * daily_std
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
@@ -150,15 +152,20 @@ def parametric(pnl: array_like, alpha: array_like, daily_std: float) -> np.ndarr
     return data
 
 
-@jit(cache=True)
 def monte_carlo(
     pnl: array_like,
     alpha: array_like,
+    rvs: callable = stats.norm.rvs,
+    **kwargs
 ) -> np.ndarray:
     """
     The Monte Carlo Method involves developing a model for future stock price returns and running multiple
     hypothetical trials through the model. A Monte Carlo simulation refers to any method that randomly
     generates trials, but by itself does not tell us anything about the underlying methodology.
+    
+    The Stressed Monte Carlo Method uses the Gumel distribution (gummel_r) to generate the random trials. 
+    The Gumbel distribution is sometimes referred to as a type I Fisher-Tippett distribution. It is also
+    related to the extreme value distribution, log-Weibull and Gompertz distributions.
 
     Parameters
     ----------
@@ -166,7 +173,9 @@ def monte_carlo(
         A DataFrame with the daily profit and losses.
     alpha : list
         A list significance levels (alpha values) for VaR.
-
+    rvs : callable
+        Random variates of given type. Default is `stats.norm.rvs`.
+    
     Returns
     -------
     out : list
@@ -185,10 +194,10 @@ def monte_carlo(
     [SciPy Gumbel Function](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gumbel_r.html)
     """
     confidence_level = 1 - alpha
-    n_simulations = 100000
+    n_simulations = 5000
 
-    # Run the Monte Carlo simulation: generate random numbers from the fitted t-distribution
-    simulated_returns = norm.rvs(loc=np.mean(pnl), scale=np.std(pnl), size=n_simulations)
+    # Run the Monte Carlo simulation: generate random numbers from a fitted distribution
+    simulated_returns = rvs(size=n_simulations, **kwargs)
 
     # Sort the simulated returns in ascending order
     simulated_returns = np.sort(simulated_returns)
@@ -204,7 +213,7 @@ def monte_carlo(
     return data
 
 
-def garch(pnl, alpha):
+def garch(pnl, alpha, **kwargs):
     """
     This method estimates the Value at Risk with a generalised autoregressive conditional heteroskedasticity (GARCH)
     model.
@@ -239,7 +248,7 @@ def garch(pnl, alpha):
         conditional_volatilities = model_fit.conditional_volatility
 
     # Compute VaR at the desired confidence level (e.g., 99%)
-    var_values = [(norm.ppf(item) * conditional_volatilities)[-1] for item in alpha]
+    var_values = [(stats.norm.ppf(item) * conditional_volatilities)[-1] for item in alpha]
 
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
     cdar_values = compute_cdar(pnl=pnl, var=var_values)
