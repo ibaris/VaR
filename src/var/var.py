@@ -20,22 +20,25 @@ References
 [Wikipedia](https://en.wikipedia.org/wiki/Value_at_risk)
 """
 
+import itertools
 import logging
 import re
 import time
 import warnings
-from typing import Tuple, Union
+from typing import Literal, Tuple, Union, get_args
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from arch.utility.exceptions import ConvergenceWarning
-from tqdm import trange
+from fitter import Fitter
 from scipy.optimize import dual_annealing
-from var.auxiliary import array_like
-from var.methods import garch, historic, monte_carlo, parametric
+from tqdm import trange
+
 from var import objectives
+from var.auxiliary import __DISTRIBUTIONS__, array_like, distributions
+from var.methods import garch, historic, monte_carlo, parametric
 
 __all__ = ["VaR"]
 
@@ -58,6 +61,18 @@ sns.set_style("whitegrid")
 # Pandas DataFrame display settings.
 pd.set_option('display.max_columns', 15)
 pd.set_option('display.max_rows', 15)
+
+# List of colors
+colors = ['#FF7600', '#9d0208', '#9d0255', 'c', 'm', 'y', 'k']
+# List of line styles
+line_styles = ['-', '--', '-.', ':']
+# List of marker
+markers = ["s", "d", "o", "v", "x"]
+
+# Create cycle iterators
+color_cycle = itertools.cycle(colors)
+line_style_cycle = itertools.cycle(line_styles)
+marker_cycle = itertools.cycle(markers)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -109,7 +124,12 @@ class VaR:
     [investopedia](https://www.investopedia.com/articles/04/092904.asp)
     """
 
-    def __init__(self, returns: pd.DataFrame, weights: array_like, alpha: Union[array_like, None] = None, **kwargs):
+    def __init__(self,
+                 returns: pd.DataFrame,
+                 weights: array_like,
+                 alpha: Union[array_like, None] = None,
+                 distribution: Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r", "f"] = "norm",
+                 **kwargs):
         """
         Initialize the Value-at-Risk class instance.
 
@@ -121,16 +141,23 @@ class VaR:
             An array with different weights corresponding to the assets.
         alpha : Union[array_like, None]
             A list significance levels (alpha values) for VaR. If None, the default values are [0.05, 0.025, 0.01].
-
+        distribution : Literal["chauchy", "chi2", "expon", "exponpow", "gamma", "lognorm", "norm", "powerlaw", "rayleigh", "uniform", "t", "gumbel_r", "f"]
+            The distribution to use for the VaR calculation. The default is "norm". If the distribution is 
+            `norm` or `t`, the mean and the standard deviation of the returns are used. The degree of 
+            freedom of the `t` distribution is set to `len(returns) - 1`.
+        **kwargs : dict
+            Additional keyword arguments for the distribution methods. The distribution kwargs are from the 
+            individual distribution methods of `scipy.stats`. 
+    
         Notes
         -----
         Note, that the length of the weights must the same as the amount of columns of the `returns` parameter.
 
         """
-        # if distribution not in list(get_args(distributions)):
-        #     raise ValueError(
-        #         f"Distribution {distribution} not available. Available distributions are {list(get_args(distributions))}."
-        #     )
+        if distribution not in list(get_args(distributions)):
+            raise ValueError(
+                f"Distribution {distribution} not available. Available distributions are {list(get_args(distributions))}."
+            )
 
         self.alpha = np.array([0.05, 0.025, 0.01]) if alpha is None else np.atleast_1d(alpha)
         self.alpha.sort()
@@ -172,6 +199,22 @@ class VaR:
 
         self.methods = list(__METHODS__.keys())
 
+        # ----------------------------------------------------------------------------------------------
+        # Distributions
+        # ----------------------------------------------------------------------------------------------
+        self.__dist_name = distribution
+        self.distribution = __DISTRIBUTIONS__[distribution]
+        self.kwargs = kwargs
+
+        if distribution == "norm":
+            self.kwargs["loc"] = self._mean_pnl
+            self.kwargs["scale"] = self._volatility
+
+        if distribution == "t":
+            self.kwargs["df"] = len(self.returns) - 1
+            self.kwargs["loc"] = self._mean_pnl
+            self.kwargs["scale"] = self._volatility
+
     # ----------------------------------------------------------------------------------------------
     # Magic Methods
     # ----------------------------------------------------------------------------------------------
@@ -194,9 +237,11 @@ class VaR:
     def __get_data_range(self, data, begin_date, end_date):
         if begin_date is None and end_date is not None:
             return data.loc[:end_date]
-        elif begin_date is not None and end_date is None:
+
+        if begin_date is not None and end_date is None:
             return data.loc[begin_date:]
-        elif begin_date is not None and end_date is not None:
+
+        if begin_date is not None and end_date is not None:
             return data.loc[begin_date:end_date]
 
         return data
@@ -204,6 +249,52 @@ class VaR:
     # ----------------------------------------------------------------------------------------------
     # Public Methods
     # ----------------------------------------------------------------------------------------------
+    def fit_distributions(self,
+                          distribution: Union[Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r",
+                                                      "f"], None] = None,
+                          include_other: bool = False,
+                          plot: bool = False,
+                          verbose: bool = False):
+        """Fit a distribution to the returns data. 
+
+        Parameters
+        ----------
+        distribution: Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r", "f"] or None, optional
+            Choose a distribution to fit. If None (default)  consider the one you specified in the 
+            initialization process (default).
+        include_other : bool, optional
+            Determine if all available distributions should be considered in order to find the best fitting
+            distribution (True), or only the one you specified in the initialization process (default).
+        plot : bool, optional
+            Plot the best fitted distribution, by default False.
+        verbose : bool, optional
+            Print intermediate steps, by default False.
+        """
+        if distribution is None:
+            distribution = self.__dist_name if not include_other else get_args(distributions)
+
+        f = Fitter(self.pnl.values.flatten(), distributions=distribution)
+        f.fit(progress=verbose)
+
+        if verbose:
+            print("\n")
+            print("Best fits:")
+            print("----------")
+
+        if plot or verbose:
+            print(f.summary(plot=plot))
+
+        best_fit = f.get_best(method='sumsquare_error')
+        self.__dist_name = list(best_fit.keys())[0]
+        self.distribution = __DISTRIBUTIONS__[self.__dist_name]
+        self.kwargs = best_fit[self.__dist_name]
+
+        if verbose:
+            print("\n")
+            print("Best fit:")
+            print("---------")
+            print(f"Distribution {self.__dist_name} with parameters {self.kwargs}")
+
     def historic(self):
         """
         The historical method simply re-organizes actual historical returns, putting them in order from worst to best.
@@ -237,7 +328,16 @@ class VaR:
         ----------
         [Risk.net](https://www.risk.net/definition/value-at-risk-var)
         """
-        data = parametric(pnl=self.pnl.values, alpha=self.alpha, daily_std=self._portfolio_volatility)
+        kwargs = self.kwargs.copy()
+
+        kwargs.pop("loc", None)
+        kwargs.pop("scale", None)
+
+        data = parametric(pnl=self.pnl.values,
+                          alpha=self.alpha,
+                          daily_std=self._portfolio_volatility,
+                          ppf=self.distribution.ppf,
+                          **kwargs)
 
         df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
@@ -269,12 +369,7 @@ class VaR:
         [SciPy Gumbel Function](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gumbel_r.html)
         """
 
-        # if self.__dist_name == "gumbel_r":
-        #     pnl = self.pnl.resample('W').min().dropna().values
-        # else:
-        #     pnl = self.pnl.values
-
-        data = monte_carlo(pnl=self.pnl.values, alpha=self.alpha)
+        data = monte_carlo(pnl=self.pnl.values, alpha=self.alpha, rvs=self.distribution.rvs, **self.kwargs)
 
         df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
@@ -330,7 +425,7 @@ class VaR:
         summary.index.name = time.strftime("%Y-%m-%d")
         return summary
 
-    def backtest(self, method: str, window_days: int = 250):
+    def backtest(self, method: str, window_days: int = 250, auto_fit: bool = False):
         """
         Generate the Backtest data.
 
@@ -358,6 +453,13 @@ class VaR:
         method_applied = __METHODS__[method]
         kwargs = {"pnl": None, "alpha": self.alpha}
 
+        # Add the distribution parameter to the keyword arguments.
+        kwargs.update(self.kwargs)
+
+        #* Delete loc scale values, since these are different for each back-testing period.
+        kwargs.pop("loc", None)
+        kwargs.pop("scale", None)
+
         function_name = method_applied.__name__
         str_method = function_name.replace("_", " ").title()
 
@@ -368,22 +470,27 @@ class VaR:
             returns_sample = self.returns[i:i + window_days]
 
             pnl = np.average(returns_sample, 1, self.weights)
+            kwargs["pnl"] = pnl
 
-            # if method == "mc":
-            #     if self.__dist_name == "gumbel_r":
-            #         kwargs["pnl"] = pd.DataFrame(pnl, index=returns_sample.index,
-            #                                      columns=["Daily PnL"]).resample('W').min().dropna().values
+            if auto_fit:
+                f = Fitter(pnl, distributions=self.__dist_name)
+                f.fit(progress=False)
 
-            #     else:
-            #         kwargs["pnl"] = pnl
+                best_fit = f.get_best(method='sumsquare_error')
+                kwargs.update(best_fit[self.__dist_name])
+
+            else:
+                kwargs["loc"] = np.mean(pnl)
+                kwargs["scale"] = np.std(pnl)
 
             if method == "p":
-                kwargs["pnl"] = pnl
                 cov_matrix = returns_sample.cov()
                 daily_std = np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))
                 kwargs["daily_std"] = daily_std
-            else:
-                kwargs["pnl"] = pnl
+                kwargs["ppf"] = self.distribution.ppf
+
+            if method == "mc":
+                kwargs["rvs"] = self.distribution.rvs
 
             var_dict[returns_sample.index.max()] = method_applied(**kwargs)
 
@@ -579,30 +686,33 @@ class VaR:
         for windows in [0]:
             header_exception = self.header_exception[windows:windows + self.len_alpha]
             header = self.header[windows:windows + self.len_alpha]
-            header_list.extend([header[0], header[-1]])
-            header_exception_list.extend([header_exception[0], header_exception[-1]])
+            header_list.extend(header)
+            header_exception_list.extend(header_exception)
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
-        ax.plot(table['Daily PnL'], color='#003049')
+        ax.plot(table['Daily PnL'], color='#003049', label='Daily PnL')
 
-        ax.plot(table[header_list[0]], ":", color='#FF7600', alpha=0.7)
-        ax.plot(table[header_list[-1]], "-.", color='#9d0208', alpha=0.7)
+        for i, head in enumerate(header_list):
+            color = next(color_cycle)
+            ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
 
-        exceed_0 = table[table[header_exception_list[0]] == True]['Daily PnL']
-        exceed_1 = table[table[header_exception_list[-1]] == True]['Daily PnL']
+            exceed_0 = table[table[header_exception_list[i]] == True]['Daily PnL']
 
-        ax.scatter(exceed_0.index, exceed_0, marker='s', facecolors='none', edgecolors='#FF7600', s=120)
-        ax.scatter(exceed_1.index, exceed_1, marker='x', facecolors='#9d0208', s=120)
+            ax.scatter(exceed_0.index,
+                       exceed_0,
+                       marker=next(marker_cycle),
+                       facecolors='none',
+                       edgecolors=color,
+                       s=120,
+                       label=header_exception_list[i])
 
         ax.spines['bottom'].set_color('#b0abab')
         ax.spines['top'].set_color('#b0abab')
         ax.spines['right'].set_visible(False)
         ax.spines['left'].set_visible(False)
 
-        ax.legend(['Daily PnL', header_list[0], header_list[-1], header_exception_list[0], header_exception_list[-1]],
-                  loc='upper left',
-                  prop={'size': 12})
+        ax.legend(loc='upper left', prop={'size': 12})
 
         ax.set_title(backtest_data.index.name + ' VaR Backtest', fontsize=16, fontweight=1)
 
@@ -629,36 +739,38 @@ class VaR:
         header_list = []
         header_exception_list = []
 
-        for windows in [3]:
+        for windows in [self.len_alpha]:
             header_exception = self.header_exception[windows:windows + self.len_alpha]
             header = self.header[windows:windows + self.len_alpha]
-            header_list.extend([header[0], header[-1]])
-            header_exception_list.extend([header_exception[0], header_exception[-1]])
-
-        daily_loss = table[table["Daily PnL"] < 0]
-
-        exceed_1 = daily_loss[daily_loss[header_exception_list[0]] == True]['Daily PnL']
-        exceed_2 = daily_loss[daily_loss[header_exception_list[-1]] == True]['Daily PnL']
+            header_list.extend(header)
+            header_exception_list.extend(header_exception)
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
-        ax.plot(daily_loss.index, daily_loss['Daily PnL'], label='Actual Loss', alpha=1, color='#2940D3')
+        ax.plot(table['Daily PnL'], color='#003049', label='Daily PnL')
 
-        ax.plot(daily_loss.index, daily_loss[header[0]], label=header[0], color='#FF7600', alpha=0.7)
-        ax.plot(daily_loss.index, daily_loss[header[-1]], label=header[-1], color='#9d0208', alpha=0.7)
+        for i, head in enumerate(header_list):
+            color = next(color_cycle)
+            ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
 
-        ax.scatter(exceed_1.index, exceed_1, marker='s', facecolors='none', edgecolors='deeppink', s=120)
-        ax.scatter(exceed_2.index, exceed_2, marker='x', facecolors='#9d0208', s=120)
+            exceed_0 = table[table[header_exception_list[i]] == True]['Daily PnL']
 
-        ax.legend(loc=3, prop={'size': 12})
+            ax.scatter(exceed_0.index,
+                       exceed_0,
+                       marker=next(marker_cycle),
+                       facecolors='none',
+                       edgecolors=color,
+                       s=120,
+                       label=header_exception_list[i])
+
         ax.spines['bottom'].set_color('#b0abab')
         ax.spines['top'].set_color('#b0abab')
         ax.spines['right'].set_visible(False)
         ax.spines['left'].set_visible(False)
-        ax.set_title(table.index.name + ' ES Backtest', fontsize=16, fontweight=1)
 
-        ax.legend(['Daily PnL', header_list[0], header_list[-1], header_exception_list[0], header_exception_list[-1]],
-                  prop={'size': 12})
+        ax.legend(loc='upper left', prop={'size': 12})
+
+        ax.set_title(backtest_data.index.name + ' VaR Backtest', fontsize=16, fontweight=1)
 
         plt.tight_layout()
         plt.show()
@@ -683,36 +795,38 @@ class VaR:
         header_list = []
         header_exception_list = []
 
-        for windows in [6]:
+        for windows in [2 * self.len_alpha]:
             header_exception = self.header_exception[windows:windows + self.len_alpha]
             header = self.header[windows:windows + self.len_alpha]
-            header_list.extend([header[0], header[-1]])
-            header_exception_list.extend([header_exception[0], header_exception[-1]])
-
-        daily_loss = table[table["Daily PnL"] < 0]
-
-        exceed_1 = daily_loss[daily_loss[header_exception_list[0]] == True]['Daily PnL']
-        exceed_2 = daily_loss[daily_loss[header_exception_list[-1]] == True]['Daily PnL']
+            header_list.extend(header)
+            header_exception_list.extend(header_exception)
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
-        ax.plot(daily_loss.index, daily_loss['Daily PnL'], label='Actual Loss', alpha=1, color='#2940D3')
+        ax.plot(table['Daily PnL'], color='#003049', label='Daily PnL')
 
-        ax.plot(daily_loss.index, daily_loss[header[0]], label=header[0], color='#FF7600', alpha=0.7)
-        ax.plot(daily_loss.index, daily_loss[header[-1]], label=header[-1], color='#9d0208', alpha=0.7)
+        for i, head in enumerate(header_list):
+            color = next(color_cycle)
+            ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
 
-        ax.scatter(exceed_1.index, exceed_1, marker='s', facecolors='none', edgecolors='deeppink', s=120)
-        ax.scatter(exceed_2.index, exceed_2, marker='x', facecolors='#9d0208', s=120)
+            exceed_0 = table[table[header_exception_list[i]] == True]['Daily PnL']
 
-        ax.legend(loc=3, prop={'size': 12})
+            ax.scatter(exceed_0.index,
+                       exceed_0,
+                       marker=next(marker_cycle),
+                       facecolors='none',
+                       edgecolors=color,
+                       s=120,
+                       label=header_exception_list[i])
+
         ax.spines['bottom'].set_color('#b0abab')
         ax.spines['top'].set_color('#b0abab')
         ax.spines['right'].set_visible(False)
         ax.spines['left'].set_visible(False)
-        ax.set_title(table.index.name + ' CDaR Backtest', fontsize=16, fontweight=1)
 
-        ax.legend(['Daily PnL', header_list[0], header_list[-1], header_exception_list[0], header_exception_list[-1]],
-                  prop={'size': 12})
+        ax.legend(loc='upper left', prop={'size': 12})
+
+        ax.set_title(backtest_data.index.name + ' VaR Backtest', fontsize=16, fontweight=1)
 
         plt.tight_layout()
         plt.show()
