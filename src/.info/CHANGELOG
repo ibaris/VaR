@@ -7,12 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2023.7.0] - 2023-07-02
 
-Add custom distribution fitting.
+Add custom distribution fitting and PELVE.
 
 ### Add
 
 - Add new method in order to estimate the distribution of the returns.
 - Adjust the parametric and Monte Carlo Method based on the choosen distribution.
+- Add PELVE estimation.
+
+### Fix
+
+- Add version to requirements (Thank you @barty5260)
 
 ## [2023.6.2] - 2023-06-06
 
