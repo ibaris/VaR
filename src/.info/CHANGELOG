@@ -13,7 +13,7 @@ Add custom distribution fitting and PELVE.
 
 - Add new method in order to estimate the distribution of the returns.
 - Adjust the parametric and Monte Carlo Method based on the choosen distribution.
-- Add PELVE estimation.
+- Add PELVE estimation (Thank you @Osman Mahmud Kim ).
 
 ### Fix
 
