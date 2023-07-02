@@ -29,7 +29,8 @@ __DISTRIBUTIONS__ = {
     'rayleigh': stats.rayleigh,
     'uniform': stats.uniform,
     't': stats.t,
-    "gumbel_r": stats.gumbel_r
+    "gumbel_r": stats.gumbel_r,
+    "f": stats.f
 }
 
 number = Union[int, float]
@@ -37,7 +38,7 @@ number_like = Union[List[number], number]
 array_like = Union[List[number], np.ndarray]
 data_frame = pd.DataFrame
 distributions = Literal["chauchy", "chi2", "expon", "exponpow", "gamma", "lognorm", "norm", "powerlaw", "rayleigh",
-                        "uniform", "t", "gumbel_r", "auto"]
+                        "uniform", "t", "gumbel_r", "f"]
 
 
 def load_data():
