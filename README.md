@@ -27,25 +27,17 @@
 </div>
 
 # Introduction
-
-"The search for appropriate risk measuring methodologies has been followed by increased financial uncertainty worldwide. Financial
-turmoil and the increased volatility of financial markets have induced the design and development of more sophisticated tools for
-measuring and forecasting risk. The most well known risk measure is value at risk (VaR), which is defined as the maximum loss over
-a targeted horizon for a given level of confidence. In other words, it is an estimation of the tails of the empirical distribution
-of financial losses. It can be used in all types of financial risk
-measurement" ([Julija Cerović Smolović, 2017](https://doi.org/10.1080/1331677X.2017.1305773)).
-
-In addition to Value at Risk, the package includes Conditional Value at Risk (Expected Shortfall or CVaR) and Conditional Drawdown
-at Risk (CDaR).
+The "VaR" package is a comprehensive Python tool for financial risk assessment, specializing in Value at Risk (VaR) and its extensions. It enables robust financial risk forecasting by incorporating methods like historical, parametric, Monte Carlo, and Parametric GARCH. It also focuses on the [Probability Equivalent Level of VaR and Expected Shortfall](https://www.sciencedirect.com/science/article/abs/pii/S0304407622000380) (PELVE). The package also features backtesting capabilities, distribution fitting, and detailed plotting options for clear visualization. Designed for ease of use, it includes practical examples and is easily installable through pip. With dependencies like numpy and pandas, it's tailored for those seeking advanced risk measurement tools in finance.
 
 # Key Features
 
 Calculate, Backtest and Plot the
 
 - Value at Risk,
-- Conditional Value at Risk,
+- Conditional Value at Risk (Expected Shortfall),
 - Conditional Drawdown at Risk,
-
+- Probability Equivalent Level of VaR and Expected Shortfall
+- 
 with different methods, such that:
 
 - Historical
