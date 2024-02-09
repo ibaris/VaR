@@ -425,7 +425,7 @@ class VaR:
         summary.index.name = time.strftime("%Y-%m-%d")
         return summary
 
-    def backtest(self, method: str, window_days: int = 250, auto_fit: bool = False):
+    def backtest(self, method: str, window: int = 250, auto_fit: bool = False):
         """
         Generate the Backtest data.
 
@@ -437,8 +437,8 @@ class VaR:
                 * 'p': VaR calculated with the parametric method,
                 * 'mc': VaR calculated with the monte carlo method,
                 * 'g': VaR calculated with the garch method.
-        window_days : int
-            Backtest horizon in days.
+        window : int
+            Backtest horizon in the same unit as the returns. Default is 250.
 
         Returns
         -------
@@ -466,8 +466,8 @@ class VaR:
         desc = f"Backtest: {str_method} Method"
 
         var_dict = {}
-        for i in trange(self.n - window_days, desc=desc, leave=True):
-            returns_sample = self.returns[i:i + window_days]
+        for i in trange(self.n - window, desc=desc, leave=True):
+            returns_sample = self.returns[i:i + window]
 
             pnl = np.average(returns_sample, 1, self.weights)
             kwargs["pnl"] = pnl
