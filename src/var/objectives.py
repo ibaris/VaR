@@ -10,7 +10,8 @@ Objective Functions
 This files contains the objective functions in order to perform optimization tasks.
 """
 import numpy as np
-from numba import jit
+# TODO: Jit seems to be not working with the current version of Numba. I will need to investigate this issue.
+# from numba import jit
 from scipy.stats import norm
 
 from var.auxiliary import array_like
@@ -64,7 +65,7 @@ def pelve_parameteric(var_value: float, pnl: array_like, daily_std: float):
 
     """
 
-    @jit(cache=True)
+    # @jit(cache=True, nopython=True)
     def objective(alpha: float) -> float:
         """The objective function that returns the absolute difference between the ES value and the desired 
         VaR value at a inputted significance level alpha.
@@ -159,7 +160,7 @@ def pelve_historic(var_value: float, pnl: array_like):
 
     """
 
-    @jit(cache=True)
+    # @jit(cache=True, nopython=True)
     def objective(alpha: float) -> float:
         """The objective function that returns the absolute difference between the ES value and the desired 
         VaR value at a inputted significance level alpha.
