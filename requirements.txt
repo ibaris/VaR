@@ -1,18 +1,18 @@
 # This file may be used to create an environment using:
 # $ conda create --name <env> --file <this file>
 # platform: win-64
-arch=5.6.0=pypi_0
-fitter=1.5.2=pypi_0
-matplotlib=3.7.1=pypi_0
-matplotlib-inline=0.1.6=py39haa95532_0
-numba=0.57.0=py39h4ed8f06_0
-numpy=1.24.3=py39h79a8e48_1
-numpy-base=1.24.3=py39h8a87ada_1
-pandas=1.5.3=py39hf11a4ad_0
-scipy=1.10.1=py39hdcfc7df_1
-seaborn=0.12.2=pypi_0
-setuptools=67.8.0=py39haa95532_0
-tox=4.6.0=pypi_0
-tqdm=4.65.0=pypi_0
-var=2023.6.2=pypi_0
-vartests=0.2.2=pypi_0
+arch
+fitter
+matplotlib
+matplotlib-inline
+numba
+numpy
+numpy-base
+pandas
+scipy
+seaborn
+setuptools
+tox
+tqdm
+var
+vartests
