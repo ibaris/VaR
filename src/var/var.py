@@ -459,7 +459,10 @@ class VaR:
         summary.index.name = time.strftime("%Y-%m-%d")
         return summary
 
-    def backtest(self, method: str, window: int = 250, auto_fit: bool = False):
+    def backtest(self,
+                 method: Literal["h", "p", "mc", "g"],
+                 window: int = 250,
+                 auto_fit: bool = False) -> pd.DataFrame:
         """
         Generate the Backtest data.
 
@@ -473,6 +476,8 @@ class VaR:
                 * 'g': VaR calculated with the garch method.
         window : int
             Backtest horizon in the same unit as the returns. Default is 250.
+        auto_fit : bool, optional
+            Automatically fit the distribution to the data, by default False.
 
         Returns
         -------
