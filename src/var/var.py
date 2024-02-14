@@ -25,7 +25,7 @@ import logging
 import re
 import time
 import warnings
-from typing import Literal, Tuple, Union, get_args
+from typing import Literal, Optional, Sequence, Tuple, Union, get_args
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -43,14 +43,16 @@ from var.methods import garch, historic, monte_carlo, parametric
 __all__ = ["VaR"]
 
 __METHODS__ = {"h": historic, "p": parametric, "mc": monte_carlo, "g": garch}
-__PELVE_OBJECTIVES__ = {"h": objectives.pelve_historic, "p": objectives.pelve_parameteric}
+__PELVE_OBJECTIVES__ = {"h": objectives.pelve_historic,
+                        "p": objectives.pelve_parameteric}
 
 # ----------------------------------------------------------------------------------------------
 # Environmental Settings
 # ----------------------------------------------------------------------------------------------
 # Filter `ConvergenceWarning` of `arch` module.
 logging.captureWarnings(True)
-warnings.filterwarnings('always', category=ConvergenceWarning, module=r'^{0}\.'.format(re.escape(__name__)))
+warnings.filterwarnings('always', category=ConvergenceWarning,
+                        module=r'^{0}\.'.format(re.escape(__name__)))
 warnings.warn("This is a ConvergenceWarning", category=ConvergenceWarning)
 
 # Plot settings
@@ -78,7 +80,7 @@ marker_cycle = itertools.cycle(markers)
 # ----------------------------------------------------------------------------------------------
 # Value at Risk Class
 # ----------------------------------------------------------------------------------------------
-#pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-instance-attributes
 class VaR:
     """
     The class to estimate the Value at Risk (VaR), Conditional Value at Risk or Expected Shortfall (ES) and the Conditional Drawdown at risk. The
@@ -126,9 +128,10 @@ class VaR:
 
     def __init__(self,
                  returns: pd.DataFrame,
-                 weights: array_like,
+                 weights: Optional[Sequence] = None,
                  alpha: Union[array_like, None] = None,
-                 distribution: Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r", "f"] = "norm",
+                 distribution: Literal["chi2", "gamma", "lognorm",
+                                       "norm", "uniform", "t", "gumbel_r", "f"] = "norm",
                  **kwargs):
         """
         Initialize the Value-at-Risk class instance.
@@ -137,8 +140,10 @@ class VaR:
         ----------
         returns : pd.DataFrame
             A DataFrame object where the columns are the asset daily returns where the index is the corresponding date.
-        weights : array_like
-            An array with different weights corresponding to the assets.
+        weights : Sequence, optional
+            The weights corresponding to the assets in the portfolio. If None, then the weights will be equal to 1/n,
+            where n is the number of assets in the portfolio. Default is None. If the sum of the weights is not equal to 1,
+            then the weights will be normalized to sum to 1.
         alpha : Union[array_like, None]
             A list significance levels (alpha values) for VaR. If None, the default values are [0.05, 0.025, 0.01].
         distribution : Literal["chauchy", "chi2", "expon", "exponpow", "gamma", "lognorm", "norm", "powerlaw", "rayleigh", "uniform", "t", "gumbel_r", "f"]
@@ -148,7 +153,7 @@ class VaR:
         **kwargs : dict
             Additional keyword arguments for the distribution methods. The distribution kwargs are from the 
             individual distribution methods of `scipy.stats`. 
-    
+
         Notes
         -----
         Note, that the length of the weights must the same as the amount of columns of the `returns` parameter.
@@ -159,7 +164,22 @@ class VaR:
                 f"Distribution {distribution} not available. Available distributions are {list(get_args(distributions))}."
             )
 
-        self.alpha = np.array([0.05, 0.025, 0.01]) if alpha is None else np.atleast_1d(alpha)
+        # Create Weights ===================================================================
+        if weights is None:
+            weights = np.ones(returns.shape[1]) / returns.shape[1]
+
+        if len(weights) != returns.shape[1]:
+            raise ValueError("The length of the weights must be equal to the number of assets in the portfolio. "
+                             f"The current length of the weights is {len(weights)} and the number of assets in the portfolio is {returns.shape[1]}.")
+
+        if np.sum(weights) != 1:
+            weights = np.array(weights) / np.sum(weights)
+
+        self.weights = weights
+
+        # Create Alpha =====================================================================
+        self.alpha = np.array(
+            [0.05, 0.025, 0.01]) if alpha is None else np.atleast_1d(alpha)
         self.alpha.sort()
         self.alpha = self.alpha[::-1]
 
@@ -169,16 +189,19 @@ class VaR:
             raise AssertionError("The amount of alpha should be 3.")
 
         confidence = 1 - self.alpha
+
+        # Create Header ====================================================================
         headers = ["VaR", "ES", "CDaR"]
 
         self.header = []
         for i in range(len(headers)):
-            self.header.extend(["{0}(".format(headers[i]) + str(item * 100) + ")" for item in confidence])
+            self.header.extend(
+                ["{0}(".format(headers[i]) + str(item * 100) + ")" for item in confidence])
 
         self.header_exception = [item + " exception" for item in self.header]
 
+        # Compute General Information ======================================================
         self.returns = returns
-        self.weights = weights
         self.n = self.returns.index.shape[0]
         self.__max_date = self.returns.index.max()
         self.pnl = pd.DataFrame(np.average(self.returns, 1, self.weights),
@@ -187,7 +210,8 @@ class VaR:
 
         cov_matrix = self.returns.cov()
 
-        self._portfolio_volatility = np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))
+        self._portfolio_volatility = np.sqrt(
+            self.weights.T.dot(cov_matrix).dot(self.weights))
         self._mean_pnl = np.mean(self.pnl.values)
         self._volatility = np.std(self.pnl.values)
 
@@ -221,9 +245,11 @@ class VaR:
     def __repr__(self):
         head = "<VaR - {mu}: {mu_val}%, {sigma}: {sigma_val}%, " \
                "Portfolio {sigma}: {port_sigma_val}%>".format(mu=chr(956),
-                                                              mu_val=round(self._mean_pnl * 100, 2),
+                                                              mu_val=round(
+                                                                  self._mean_pnl * 100, 2),
                                                               sigma=chr(963),
-                                                              sigma_val=round(self._volatility * 100, 4),
+                                                              sigma_val=round(
+                                                                  self._volatility * 100, 4),
                                                               port_sigma_val=round(self._portfolio_volatility * 100, 4))
 
         return head
@@ -271,7 +297,8 @@ class VaR:
             Print intermediate steps, by default False.
         """
         if distribution is None:
-            distribution = self.__dist_name if not include_other else get_args(distributions)
+            distribution = self.__dist_name if not include_other else get_args(
+                distributions)
 
         f = Fitter(self.pnl.values.flatten(), distributions=distribution)
         f.fit(progress=verbose)
@@ -293,7 +320,8 @@ class VaR:
             print("\n")
             print("Best fit:")
             print("---------")
-            print(f"Distribution {self.__dist_name} with parameters {self.kwargs}")
+            print(
+                f"Distribution {self.__dist_name} with parameters {self.kwargs}")
 
     def historic(self):
         """
@@ -311,7 +339,8 @@ class VaR:
 
         """
         data = historic(self.pnl.values, self.alpha)
-        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
+        df = pd.DataFrame(dict(zip(self.header, data)),
+                          index=[self.__max_date])
         return df
 
     def parametric(self):
@@ -339,7 +368,8 @@ class VaR:
                           ppf=self.distribution.ppf,
                           **kwargs)
 
-        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
+        df = pd.DataFrame(dict(zip(self.header, data)),
+                          index=[self.__max_date])
         return df
 
     def monte_carlo(self):
@@ -369,9 +399,11 @@ class VaR:
         [SciPy Gumbel Function](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gumbel_r.html)
         """
 
-        data = monte_carlo(pnl=self.pnl.values, alpha=self.alpha, rvs=self.distribution.rvs, **self.kwargs)
+        data = monte_carlo(pnl=self.pnl.values, alpha=self.alpha,
+                           rvs=self.distribution.rvs, **self.kwargs)
 
-        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
+        df = pd.DataFrame(dict(zip(self.header, data)),
+                          index=[self.__max_date])
         return df
 
     def garch(self):
@@ -390,7 +422,8 @@ class VaR:
 
         """
         data = garch(self.pnl.values, self.alpha)
-        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
+        df = pd.DataFrame(dict(zip(self.header, data)),
+                          index=[self.__max_date])
         return df
 
     def summary(self):
@@ -418,7 +451,8 @@ class VaR:
         method_monte_carlo = self.monte_carlo()
         method_garch = self.garch()
 
-        summary = pd.concat([method_parametric, method_historic, method_monte_carlo, method_garch], ignore_index=True)
+        summary = pd.concat([method_parametric, method_historic,
+                            method_monte_carlo, method_garch], ignore_index=True)
 
         idx = ['Parametric', 'Historical', 'Monte Carlo', 'GARCH']
         summary.index = idx
@@ -456,7 +490,7 @@ class VaR:
         # Add the distribution parameter to the keyword arguments.
         kwargs.update(self.kwargs)
 
-        #* Delete loc scale values, since these are different for each back-testing period.
+        # * Delete loc scale values, since these are different for each back-testing period.
         kwargs.pop("loc", None)
         kwargs.pop("scale", None)
 
@@ -485,7 +519,8 @@ class VaR:
 
             if method == "p":
                 cov_matrix = returns_sample.cov()
-                daily_std = np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))
+                daily_std = np.sqrt(self.weights.T.dot(
+                    cov_matrix).dot(self.weights))
                 kwargs["daily_std"] = daily_std
                 kwargs["ppf"] = self.distribution.ppf
 
@@ -498,12 +533,14 @@ class VaR:
         daily_var_table.index.name = str_method
         daily_var_table.columns = self.header
 
-        daily_var_table.index = daily_var_table.index + pd.DateOffset(1)  # Adjustment for matching VaR and actual PnL
+        daily_var_table.index = daily_var_table.index + \
+            pd.DateOffset(1)  # Adjustment for matching VaR and actual PnL
 
-        df = pd.merge_asof(self.pnl, daily_var_table, right_index=True, left_index=True)
+        df = pd.merge_asof(self.pnl, daily_var_table,
+                           right_index=True, left_index=True)
         df = df.apply(pd.to_numeric)
 
-        df1 = df.filter(self.header)  #* This contains the VaR and ES values
+        df1 = df.filter(self.header)  # * This contains the VaR and ES values
 
         for i, _ in enumerate(self.header):
             df[self.header_exception[i]] = df['Daily PnL'] < df1.values[:, i]
@@ -541,18 +578,22 @@ class VaR:
         # ----------------------------------------------------------------------------------------------
         table = self.__get_data_range(backtest_data, begin_date, end_date)
 
-        df1 = table.filter(self.header)  #* This contains the VaR and ES values
-        df2 = table.filter(self.header_exception)  #* This contains the VaR and ES exceptions
+        # * This contains the VaR and ES values
+        df1 = table.filter(self.header)
+        # * This contains the VaR and ES exceptions
+        df2 = table.filter(self.header_exception)
 
-        columns = ["Amount", "Percent", "Mean Deviation", "STD Deviation", "Min Deviation", "Max Deviation"]
+        columns = ["Amount", "Percent", "Mean Deviation",
+                   "STD Deviation", "Min Deviation", "Max Deviation"]
         df = pd.DataFrame(columns=columns, index=self.header)
 
         # ----------------------------------------------------------------------------------------------
         # Compute Statistics
         # ----------------------------------------------------------------------------------------------
         # Percentages ======================================================================
-        percentages = df2.mean().values  #* This contains the VaR and ES exceptions in percent
-        amount = df2.sum().values  #* This contains the VaR and ES exceptions in amount
+        # * This contains the VaR and ES exceptions in percent
+        percentages = df2.mean().values
+        amount = df2.sum().values  # * This contains the VaR and ES exceptions in amount
 
         # Statistics =======================================================================
         for i, _ in enumerate(self.header):
@@ -565,7 +606,8 @@ class VaR:
             max_values = data.max()
             std_values = data.std()
 
-            df.iloc[i] = [amount[i], percentages[i], mean_values, std_values, min_values, max_values]
+            df.iloc[i] = [amount[i], percentages[i],
+                          mean_values, std_values, min_values, max_values]
 
         return df
 
@@ -600,7 +642,7 @@ class VaR:
         ------
         ValueError
             If method not present.
-        
+
         Note
         ----
         I already tried to avoid a grid search like this but scipy optimize functions where not able to
@@ -614,7 +656,8 @@ class VaR:
 
         """
         if method not in __METHODS__:
-            raise ValueError(f"Method {method} not understood. Available methods are {list(__METHODS__.keys())}")
+            raise ValueError(
+                f"Method {method} not understood. Available methods are {list(__METHODS__.keys())}")
 
         if method not in __PELVE_OBJECTIVES__:
             raise ValueError(
@@ -633,7 +676,8 @@ class VaR:
         var_value = method_applied(**kwargs)[0]
 
         # Compute Objective Function =======================================================
-        _ = kwargs.pop("alpha")  # Remove alpha from kwargs since it is not needed anymore.
+        # Remove alpha from kwargs since it is not needed anymore.
+        _ = kwargs.pop("alpha")
         kwargs["var_value"] = var_value
 
         objective = pelve_applied(**kwargs)
@@ -652,7 +696,8 @@ class VaR:
         pelve = optimal_es_confidence_level / alpha
 
         # Compute Error ====================================================================
-        kwargs = {'pnl': self.pnl.values.flatten(), 'alpha': np.array([optimal_es_confidence_level])}
+        kwargs = {'pnl': self.pnl.values.flatten(), 'alpha': np.array(
+            [optimal_es_confidence_level])}
 
         if method == "p":
             kwargs.update({"daily_std": self._portfolio_volatility})
@@ -695,9 +740,11 @@ class VaR:
 
         for i, head in enumerate(header_list):
             color = next(color_cycle)
-            ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
+            ax.plot(table[head], color=color, linestyle=next(
+                line_style_cycle), alpha=0.7, label=head)
 
-            exceed_0 = table[table[header_exception_list[i]] == True]['Daily PnL']
+            exceed_0 = table[table[header_exception_list[i]]
+                             == True]['Daily PnL']
 
             ax.scatter(exceed_0.index,
                        exceed_0,
@@ -714,7 +761,8 @@ class VaR:
 
         ax.legend(loc='upper left', prop={'size': 12})
 
-        ax.set_title(backtest_data.index.name + ' VaR Backtest', fontsize=16, fontweight=1)
+        ax.set_title(backtest_data.index.name +
+                     ' VaR Backtest', fontsize=16, fontweight=1)
 
         plt.tight_layout()
         plt.show()
@@ -751,9 +799,11 @@ class VaR:
 
         for i, head in enumerate(header_list):
             color = next(color_cycle)
-            ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
+            ax.plot(table[head], color=color, linestyle=next(
+                line_style_cycle), alpha=0.7, label=head)
 
-            exceed_0 = table[table[header_exception_list[i]] == True]['Daily PnL']
+            exceed_0 = table[table[header_exception_list[i]]
+                             == True]['Daily PnL']
 
             ax.scatter(exceed_0.index,
                        exceed_0,
@@ -770,7 +820,8 @@ class VaR:
 
         ax.legend(loc='upper left', prop={'size': 12})
 
-        ax.set_title(backtest_data.index.name + ' VaR Backtest', fontsize=16, fontweight=1)
+        ax.set_title(backtest_data.index.name +
+                     ' VaR Backtest', fontsize=16, fontweight=1)
 
         plt.tight_layout()
         plt.show()
@@ -807,9 +858,11 @@ class VaR:
 
         for i, head in enumerate(header_list):
             color = next(color_cycle)
-            ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
+            ax.plot(table[head], color=color, linestyle=next(
+                line_style_cycle), alpha=0.7, label=head)
 
-            exceed_0 = table[table[header_exception_list[i]] == True]['Daily PnL']
+            exceed_0 = table[table[header_exception_list[i]]
+                             == True]['Daily PnL']
 
             ax.scatter(exceed_0.index,
                        exceed_0,
@@ -826,7 +879,8 @@ class VaR:
 
         ax.legend(loc='upper left', prop={'size': 12})
 
-        ax.set_title(backtest_data.index.name + ' VaR Backtest', fontsize=16, fontweight=1)
+        ax.set_title(backtest_data.index.name +
+                     ' VaR Backtest', fontsize=16, fontweight=1)
 
         plt.tight_layout()
         plt.show()
