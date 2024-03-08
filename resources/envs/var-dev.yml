@@ -1,12 +1,12 @@
-name: var
+name: var-dev
 channels:
   - defaults
   - anaconda
   - conda-forge
 dependencies:
   - python=3.9
-  - defaults::numpy
-  - defaults::scipy
+  - numpy
+  - scipy
   - conda-forge::pre-commit
   - pandas
   - jupyter

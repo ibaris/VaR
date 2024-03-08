@@ -11,14 +11,15 @@ import warnings
 
 import numpy as np
 from arch import arch_model
-# from numba import jit
+from numba import jit
 from scipy import stats
 
 from var.auxiliary import array_like
 
 __all__ = ["historic", "parametric", "monte_carlo", "garch"]
 
-# @jit(cache=True)
+
+@jit(cache=True)
 def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray:
     """ Compute the expected Shortfall
 
@@ -51,7 +52,8 @@ def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray
 
     return es_values
 
-# @jit(cache=True)
+
+@jit(cache=True)
 def compute_cdar(pnl: array_like, var: array_like) -> np.ndarray:
     """Compute the Drawdown of a portfolio
 
@@ -103,7 +105,8 @@ def historic(pnl: array_like, alpha: array_like, **kwargs) -> np.ndarray:
     """
     confidence_level = 1 - alpha
 
-    var_values = np.percentile(pnl, 100 - (confidence_level * 100), interpolation="lower")
+    var_values = np.percentile(
+        pnl, 100 - (confidence_level * 100), method="lower")
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
     cdar_values = compute_cdar(pnl=pnl, var=var_values)
 
@@ -162,7 +165,7 @@ def monte_carlo(
     The Monte Carlo Method involves developing a model for future stock price returns and running multiple
     hypothetical trials through the model. A Monte Carlo simulation refers to any method that randomly
     generates trials, but by itself does not tell us anything about the underlying methodology.
-    
+
     The Stressed Monte Carlo Method uses the Gumel distribution (gummel_r) to generate the random trials. 
     The Gumbel distribution is sometimes referred to as a type I Fisher-Tippett distribution. It is also
     related to the extreme value distribution, log-Weibull and Gompertz distributions.
@@ -175,7 +178,7 @@ def monte_carlo(
         A list significance levels (alpha values) for VaR.
     rvs : callable
         Random variates of given type. Default is `stats.norm.rvs`.
-    
+
     Returns
     -------
     out : list
@@ -203,7 +206,8 @@ def monte_carlo(
     simulated_returns = np.sort(simulated_returns)
 
     # Compute the VaR at the desired confidence level
-    var_values = [-simulated_returns[int(n_simulations * item)] for item in confidence_level]
+    var_values = [-simulated_returns[int(n_simulations * item)]
+                  for item in confidence_level]
 
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
     cdar_values = compute_cdar(pnl=pnl, var=var_values)
@@ -248,7 +252,8 @@ def garch(pnl, alpha, **kwargs):
         conditional_volatilities = model_fit.conditional_volatility
 
     # Compute VaR at the desired confidence level (e.g., 99%)
-    var_values = [(stats.norm.ppf(item) * conditional_volatilities)[-1] for item in alpha]
+    var_values = [(stats.norm.ppf(item) * conditional_volatilities)[-1]
+                  for item in alpha]
 
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
     cdar_values = compute_cdar(pnl=pnl, var=var_values)

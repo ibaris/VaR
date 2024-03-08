@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2024.3.0] - 2023-03-08
+
+This version contains different fixes and smaller improvements. Since the
+`window_days` attribute in `VaR.backtest` is changed to `window`, this is a
+breaking change.
+
+### Add
+
+- Add flexible weights to VaR
+- Add better documentation
+
+### Changed
+
+- Changed window_days attribute in window
+- Update developing environment
+
+### Delete
+
+- Delete versions from requirements
+
 ## [2023.7.0] - 2023-07-02
 
 Add custom distribution fitting and PELVE.
