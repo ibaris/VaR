@@ -526,6 +526,10 @@ class VaR:
                 cov_matrix = returns_sample.cov()
                 daily_std = np.sqrt(self.weights.T.dot(
                     cov_matrix).dot(self.weights))
+                
+                kwargs.pop("loc", None)
+                kwargs.pop("scale", None)
+
                 kwargs["daily_std"] = daily_std
                 kwargs["ppf"] = self.distribution.ppf
 
