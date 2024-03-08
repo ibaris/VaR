@@ -11,17 +11,15 @@ import warnings
 
 import numpy as np
 from arch import arch_model
-# TODO: Jit seems to be not working with the current version of Numba. I will need to investigate this issue.
-# from numba import jit
+from numba import jit
 from scipy import stats
 
 from var.auxiliary import array_like
 
 __all__ = ["historic", "parametric", "monte_carlo", "garch"]
 
-# @jit(cache=True)
 
-
+@jit(cache=True)
 def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray:
     """ Compute the expected Shortfall
 
@@ -54,9 +52,8 @@ def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray
 
     return es_values
 
-# @jit(cache=True)
 
-
+@jit(cache=True)
 def compute_cdar(pnl: array_like, var: array_like) -> np.ndarray:
     """Compute the Drawdown of a portfolio
 
