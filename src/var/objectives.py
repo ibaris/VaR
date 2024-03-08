@@ -197,7 +197,7 @@ def pelve_historic(var_value: float, pnl: array_like):
         """
         confidence_level = 1 - alpha
 
-        var_value_es = np.percentile(pnl, 100 - (confidence_level * 100), interpolation="lower")
+        var_value_es = np.percentile(pnl, 100 - (confidence_level * 100), method="lower")
         es_value = np.mean(pnl[pnl < var_value_es])
 
         loss = abs(es_value - var_value)

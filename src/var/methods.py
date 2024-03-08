@@ -109,7 +109,7 @@ def historic(pnl: array_like, alpha: array_like, **kwargs) -> np.ndarray:
     confidence_level = 1 - alpha
 
     var_values = np.percentile(
-        pnl, 100 - (confidence_level * 100), interpolation="lower")
+        pnl, 100 - (confidence_level * 100), method="lower")
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
     cdar_values = compute_cdar(pnl=pnl, var=var_values)
 
