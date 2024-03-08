@@ -1,4 +1,4 @@
-__version__ = "2023.7.0"
+__version__ = "2024.3.0"
 
 from .auxiliary import *
 from .var import *
