@@ -27,8 +27,18 @@ at Risk (CDaR).
 # ------------------------------------------------------------------------------------------------------------
 # Environmental Functions
 # ------------------------------------------------------------------------------------------------------------
-with open('requirements.txt', encoding="utf-8") as f:
-    required = f.read().splitlines()
+# Function to read the contents of requirements.txt
+def read_requirements():
+    """Read requirements.txt, returning a list of dependencies.
+
+    Returns
+    -------
+    list of str
+        List containing the names of the required packages.
+    """
+    with open('requirements.txt', encoding='utf-8') as file:
+        return file.read().splitlines()
+
 
 setup(
     name='var',
@@ -37,6 +47,7 @@ setup(
     packages=find_packages('src'),
     package_dir={'': 'src'},
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
+    install_requires=read_requirements(),  # Required packages
     include_package_data=True,
     zip_safe=False,
     author="Ismail Baris",
