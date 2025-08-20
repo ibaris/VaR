@@ -1,4 +1,4 @@
-name: var-dev
+name: var
 channels:
   - defaults
   - anaconda

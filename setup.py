@@ -7,6 +7,7 @@ Setup of VaR Package
 *For COPYING and LICENSE details, please refer to the LICENSE file*
 
 """
+
 from glob import glob
 from os.path import basename, splitext
 
@@ -36,37 +37,36 @@ def read_requirements():
     list of str
         List containing the names of the required packages.
     """
-    with open('requirements.txt', encoding='utf-8') as file:
+    with open("requirements.txt", encoding="utf-8") as file:
         return file.read().splitlines()
 
 
 setup(
-    name='var',
-    version="2024.3.0",
-    description='Different Methods to Estimate the Value-at-Risk of a portfolio.',
-    packages=find_packages('src'),
-    package_dir={'': 'src'},
-    py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
+    name="var",
+    version="2024.3.0.0",
+    description="Different Methods to Estimate the Value-at-Risk of a portfolio.",
+    packages=find_packages("src"),
+    package_dir={"": "src"},
+    py_modules=[splitext(basename(path))[0] for path in glob("src/*.py")],
     install_requires=read_requirements(),  # Required packages
     include_package_data=True,
     zip_safe=False,
     author="Ismail Baris",
-    maintainer='Ismail Baris',
-    author_email='i.baris@outlook.de',
-    url='https://github.com/ibaris/VaR',
+    maintainer="Ismail Baris",
+    author_email="i.baris@outlook.de",
+    url="https://github.com/ibaris/VaR",
     long_description=long_description,
-    long_description_content_type='text/markdown',
-
+    long_description_content_type="text/markdown",
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
-        'Intended Audience :: Science/Research',
-        'Intended Audience :: Developers',
-        'Intended Audience :: Education',
-        'Intended Audience :: End Users/Desktop',
-        'Intended Audience :: Financial and Insurance Industry',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Operating System :: Microsoft',
+        "Intended Audience :: Science/Research",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Education",
+        "Intended Audience :: End Users/Desktop",
+        "Intended Audience :: Financial and Insurance Industry",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Operating System :: Microsoft",
     ],
 )
