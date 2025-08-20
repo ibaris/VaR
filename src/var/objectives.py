@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-# pylint: disable=E1101
 """
 Objective Functions
 ===================
@@ -9,13 +7,13 @@ Objective Functions
 
 This files contains the objective functions in order to perform optimization tasks.
 """
+
 import numpy as np
-from numba import jit
 from scipy.stats import norm
 
 from var.auxiliary import array_like
 
-__all__ = ["pelve_parameteric", "pelve_historic"]
+__all__ = ["pelve_historic", "pelve_parameteric"]
 
 
 def pelve_parameteric(var_value: float, pnl: array_like, daily_std: float):
@@ -24,7 +22,7 @@ def pelve_parameteric(var_value: float, pnl: array_like, daily_std: float):
     returns the absolute difference to the desired Value at Risk value. This function is used in the optimization
     process to find the optimal ES value for a given VaR value in order to compute the PELVE.
 
-    Under the parametric method, also known as variance-covariance method, VAR is calculated as a function of 
+    Under the parametric method, also known as variance-covariance method, VAR is calculated as a function of
     mean and variance of the returns series, assuming normal distribution.
 
     Parameters
@@ -64,9 +62,9 @@ def pelve_parameteric(var_value: float, pnl: array_like, daily_std: float):
 
     """
 
-    @jit(cache=True)
     def objective(alpha: float) -> float:
-        """The objective function that returns the absolute difference between the ES value and the desired 
+        """
+        The objective function that returns the absolute difference between the ES value and the desired
         VaR value at a inputted significance level alpha.
 
         Parameters
@@ -159,9 +157,9 @@ def pelve_historic(var_value: float, pnl: array_like):
 
     """
 
-    @jit(cache=True)
     def objective(alpha: float) -> float:
-        """The objective function that returns the absolute difference between the ES value and the desired 
+        """
+        The objective function that returns the absolute difference between the ES value and the desired
         VaR value at a inputted significance level alpha.
 
         Parameters
@@ -196,8 +194,7 @@ def pelve_historic(var_value: float, pnl: array_like):
         """
         confidence_level = 1 - alpha
 
-        var_value_es = np.percentile(
-            pnl, 100 - (confidence_level * 100), method="lower")
+        var_value_es = np.percentile(pnl, 100 - (confidence_level * 100), method="lower")
         es_value = np.mean(pnl[pnl < var_value_es])
 
         loss = abs(es_value - var_value)
