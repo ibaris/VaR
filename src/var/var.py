@@ -19,6 +19,8 @@ References
 [Wikipedia](https://en.wikipedia.org/wiki/Value_at_risk)
 """
 
+from __future__ import annotations
+
 import itertools
 import logging
 import re
@@ -32,6 +34,8 @@ import pandas as pd
 import seaborn as sns
 from arch.utility.exceptions import ConvergenceWarning
 from fitter import Fitter
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from scipy.optimize import dual_annealing
 from tqdm import trange
 
@@ -50,7 +54,7 @@ __PELVE_OBJECTIVES__ = {"h": objectives.pelve_historic, "p": objectives.pelve_pa
 # Filter `ConvergenceWarning` of `arch` module.
 logging.captureWarnings(True)
 warnings.filterwarnings("always", category=ConvergenceWarning, module=r"^{0}\.".format(re.escape(__name__)))
-warnings.warn("This is a ConvergenceWarning", category=ConvergenceWarning)
+warnings.warn("This is a ConvergenceWarning", stacklevel=2, category=ConvergenceWarning)
 
 # Plot settings
 sns.set()
@@ -129,8 +133,8 @@ class VaR:
         weights: Optional[Sequence] = None,
         alpha: Union[array_like, None] = None,
         distribution: Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r", "f"] = "norm",
-        **kwargs,
-    ):
+        **kwargs: dict,
+    ) -> None:
         """
         Initialize the Value-at-Risk class instance.
 
@@ -183,7 +187,7 @@ class VaR:
         self.len_alpha = len(self.alpha)
 
         if self.len_alpha > 3:
-            raise AssertionError("The amount of alpha should be 3.")
+            raise AssertionError("The maximum amount of alpha should be 3.")
 
         confidence = 1 - self.alpha
 
@@ -192,7 +196,7 @@ class VaR:
 
         self.header = []
         for i in range(len(headers)):
-            self.header.extend(["{0}(".format(headers[i]) + str(item * 100) + ")" for item in confidence])
+            self.header.extend([f"{headers[i]}({item * 100!s})" for item in confidence])
 
         self.header_exception = [item + " exception" for item in self.header]
 
@@ -231,7 +235,15 @@ class VaR:
     # ----------------------------------------------------------------------------------------------
     # Magic Methods
     # ----------------------------------------------------------------------------------------------
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Returns a string representation of the VaR object, including mean PnL, volatility, and portfolio volatility.
+
+        Returns
+        -------
+        str
+            A formatted string displaying the mean PnL (μ), volatility (σ), and portfolio volatility (Portfolio σ) as percentages.
+        """
         head = "<VaR - {mu}: {mu_val}%, {sigma}: {sigma_val}%, Portfolio {sigma}: {port_sigma_val}%>".format(
             mu=chr(956),
             mu_val=round(self._mean_pnl * 100, 2),
@@ -242,13 +254,35 @@ class VaR:
 
         return head
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.summary().to_string()
 
     # ----------------------------------------------------------------------------------------------
     # Private Methods
     # ----------------------------------------------------------------------------------------------
-    def __get_data_range(self, data, begin_date, end_date):
+    def __get_data_range(
+        self,
+        data: pd.DataFrame,
+        begin_date: str | pd.Timestamp | None,
+        end_date: str | pd.Timestamp | None,
+    ) -> pd.DataFrame:
+        """
+        Return a slice of the DataFrame between begin_date and end_date.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            The DataFrame to slice.
+        begin_date : str or pd.Timestamp or None
+            The start date for the slice. If None, slice from the beginning.
+        end_date : str or pd.Timestamp or None
+            The end date for the slice. If None, slice to the end.
+
+        Returns
+        -------
+        pd.DataFrame
+            The sliced DataFrame.
+        """
         if begin_date is None and end_date is not None:
             return data.loc[:end_date]
 
@@ -265,11 +299,11 @@ class VaR:
     # ----------------------------------------------------------------------------------------------
     def fit_distributions(
         self,
-        distribution: Union[Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r", "f"], None] = None,
+        distribution: Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r", "f"] | None = None,
         include_other: bool = False,
         plot: bool = False,
         verbose: bool = False,
-    ):
+    ) -> None:
         """
         Fit a distribution to the returns data.
 
@@ -289,7 +323,7 @@ class VaR:
         if distribution is None:
             distribution = self.__dist_name if not include_other else get_args(distributions)
 
-        f = Fitter(self.pnl.values.flatten(), distributions=distribution)
+        f = Fitter(self.pnl.to_numpy().flatten(), distributions=distribution)
         f.fit(progress=verbose)
 
         if verbose:
@@ -301,7 +335,7 @@ class VaR:
             print(f.summary(plot=plot))
 
         best_fit = f.get_best(method="sumsquare_error")
-        self.__dist_name = list(best_fit.keys())[0]
+        self.__dist_name = [best_fit.keys()][0]
         self.distribution = __DISTRIBUTIONS__[self.__dist_name]
         self.kwargs = best_fit[self.__dist_name]
 
@@ -311,7 +345,7 @@ class VaR:
             print("---------")
             print(f"Distribution {self.__dist_name} with parameters {self.kwargs}")
 
-    def historic(self):
+    def historic(self) -> pd.DataFrame:
         """
         The historical method simply re-organizes actual historical returns, putting them in order from worst to best.
         It then assumes that history will repeat itself, from a risk perspective.
@@ -330,7 +364,7 @@ class VaR:
         df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
 
-    def parametric(self):
+    def parametric(self) -> pd.DataFrame:
         """
         Under the parametric method, also known as variance-covariance method, VAR is calculated as a function of mean
         and variance of the returns series, assuming normal distribution.
@@ -354,7 +388,7 @@ class VaR:
         df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
 
-    def monte_carlo(self):
+    def monte_carlo(self) -> pd.DataFrame:
         """
         The Monte Carlo Method involves developing a model for future stock price returns and running multiple
         hypothetical trials through the model. A Monte Carlo simulation refers to any method that randomly
@@ -365,7 +399,7 @@ class VaR:
         extreme value distribution, log-Weibull and Gompertz distributions.
 
         Parameters
-        ---------
+        ----------
         stressed : bool
             Use the Stressed Monte Carlo Method. Default is False.
 
@@ -385,7 +419,7 @@ class VaR:
         df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
 
-    def garch(self):
+    def garch(self) -> pd.DataFrame:
         """
         This method estimates the Value at Risk with a generalised autoregressive conditional heteroskedasticity (GARCH)
         model.
@@ -404,7 +438,7 @@ class VaR:
         df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
 
-    def summary(self):
+    def summary(self) -> pd.DataFrame:
         """
         Summary of Value-at-Risk with different models:
             * Parametric Method
@@ -458,10 +492,10 @@ class VaR:
         out : pd.DataFrame
             A DataFrame object with Daily PnL, VaR and VaR exception values.
         """
-        if method not in __METHODS__.keys():
+        if method not in __METHODS__:
             raise ValueError(
                 f"Method {method} not understood. Available methods are 'h' ('historical'), 'p' ('parametric'), "
-                "'mc' ('monte carlo'), 'smv' ('stressed monte carlo') and 'g' ('garch')."
+                "'mc' ('monte carlo'), 'smv' ('stressed monte carlo') and 'g' ('garch').",
             )
 
         method_applied = __METHODS__[method]
@@ -524,14 +558,19 @@ class VaR:
         df1 = df.filter(self.header)  # * This contains the VaR and ES values
 
         for i, _ in enumerate(self.header):
-            df[self.header_exception[i]] = df["Daily PnL"] < df1.values[:, i]
+            df[self.header_exception[i]] = df["Daily PnL"] < df1.to_numpy()[:, i]
 
         df = df.dropna()
         df.index.name = str_method
 
         return df
 
-    def evaluate(self, backtest_data, begin_date=None, end_date=None):
+    def evaluate(
+        self,
+        backtest_data: pd.DataFrame,
+        begin_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
         """
         Evaluate the backtest results.
 
@@ -572,13 +611,13 @@ class VaR:
         # ----------------------------------------------------------------------------------------------
         # Percentages ======================================================================
         # * This contains the VaR and ES exceptions in percent
-        percentages = df2.mean().values
-        amount = df2.sum().values  # * This contains the VaR and ES exceptions in amount
+        percentages = df2.mean().to_numpy()
+        amount = df2.sum().to_numpy()  # * This contains the VaR and ES exceptions in amount
 
         # Statistics =======================================================================
         for i, _ in enumerate(self.header):
-            var_val = df1.values[:, i][df2.values[:, i]]
-            pnl = table["Daily PnL"][df2.values[:, i]]
+            var_val = df1.to_numpy()[:, i][df2.to_numpy()[:, i]]
+            pnl = table["Daily PnL"][df2.to_numpy()[:, i]]
             data = np.abs(pnl - var_val)
 
             mean_values = data.mean()
@@ -590,7 +629,7 @@ class VaR:
 
         return df
 
-    def compute_pelve(self, method: str, alpha: float = 0.01) -> Tuple[float, float]:
+    def compute_pelve(self, method: str, alpha: float = 0.01) -> tuple[float, float]:
         """
         PELVE is intended to help decide what confidence level to use when replacing Value at Risk (VaR)
         with Expected Shortfall (ES) in risk assessments.
@@ -645,7 +684,7 @@ class VaR:
 
         alpha = np.array([alpha])
 
-        kwargs = {"pnl": self.pnl.values.flatten(), "alpha": alpha}
+        kwargs = {"pnl": self.pnl.to_numpy().flatten(), "alpha": alpha}
 
         if method == "p":
             kwargs.update({"daily_std": self._portfolio_volatility})
@@ -673,7 +712,7 @@ class VaR:
         pelve = optimal_es_confidence_level / alpha
 
         # Compute Error ====================================================================
-        kwargs = {"pnl": self.pnl.values.flatten(), "alpha": np.array([optimal_es_confidence_level])}
+        kwargs = {"pnl": self.pnl.to_numpy().flatten(), "alpha": np.array([optimal_es_confidence_level])}
 
         if method == "p":
             kwargs.update({"daily_std": self._portfolio_volatility})
@@ -684,7 +723,12 @@ class VaR:
 
         return pelve, difference
 
-    def var_plot(self, backtest_data, begin_date=None, end_date=None):
+    def var_plot(
+        self,
+        backtest_data: pd.DataFrame,
+        begin_date: str | None = None,
+        end_date: str | None = None,
+    ) -> tuple[Figure, Axes]:
         """
         Plot the Value at Risk backtest data.
 
@@ -697,7 +741,8 @@ class VaR:
 
         Returns
         -------
-        None
+        fig, axes : Figure, Axes
+            Matplotlib figure and axes object.
         """
         table = self.__get_data_range(backtest_data, begin_date, end_date)
 
@@ -734,7 +779,14 @@ class VaR:
         plt.tight_layout()
         plt.show()
 
-    def es_plot(self, backtest_data, begin_date=None, end_date=None):
+        return fig, ax
+
+    def es_plot(
+        self,
+        backtest_data: pd.DataFrame,
+        begin_date: str | None = None,
+        end_date: str | None = None,
+    ) -> tuple[Figure, Axes]:
         """
         Plot the Conditional Value at Risk backtest data.
 
@@ -747,7 +799,8 @@ class VaR:
 
         Returns
         -------
-        None
+        fig, axes : Figure, Axes
+            Matplotlib figure and axes object.
         """
         table = self.__get_data_range(backtest_data, begin_date, end_date)
 
@@ -768,7 +821,7 @@ class VaR:
             color = next(color_cycle)
             ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
 
-            exceed_0 = table[table[header_exception_list[i]] == True]["Daily PnL"]
+            exceed_0 = table[table[header_exception_list[i]]]["Daily PnL"]
 
             ax.scatter(exceed_0.index, exceed_0, marker=next(marker_cycle), facecolors="none", edgecolors=color, s=120, label=header_exception_list[i])
 
@@ -784,7 +837,12 @@ class VaR:
         plt.tight_layout()
         plt.show()
 
-    def cdar_plot(self, backtest_data, begin_date=None, end_date=None):
+    def cdar_plot(
+        self,
+        backtest_data: pd.DataFrame,
+        begin_date: str | None = None,
+        end_date: str | None = None,
+    ) -> tuple[Figure, Axes]:
         """
         Plot the Conditional Drawdown at Risk backtest data.
 
@@ -797,7 +855,8 @@ class VaR:
 
         Returns
         -------
-        None
+        fig, axes : Figure, Axes
+            Matplotlib figure and axes object.
         """
         table = self.__get_data_range(backtest_data, begin_date, end_date)
 
@@ -818,7 +877,7 @@ class VaR:
             color = next(color_cycle)
             ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
 
-            exceed_0 = table[table[header_exception_list[i]] == True]["Daily PnL"]
+            exceed_0 = table[table[header_exception_list[i]]]["Daily PnL"]
 
             ax.scatter(exceed_0.index, exceed_0, marker=next(marker_cycle), facecolors="none", edgecolors=color, s=120, label=header_exception_list[i])
 
