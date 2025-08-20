@@ -32,5 +32,5 @@ select = ["ALL"]
 [tool.ruff]
 line-length = 180
 ignore = ["EM101", "TRY003", "T201", "D205", "D212", "PTH", "EM", "D400", "D415", "D401", "PLR0913", "D413", "ERA001", "RET504", "FBT003",
-"D404"]
+"D404", "FBT001", "FBT002"]
 

@@ -4,15 +4,10 @@
 arch
 fitter
 matplotlib
-matplotlib-inline
-numba=0.57.0
 numpy
-numpy-base
 pandas
 scipy
 seaborn
 setuptools
-tox
 tqdm
-var
 vartests
