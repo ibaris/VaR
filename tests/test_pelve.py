@@ -11,6 +11,7 @@ Test the PELVE methods in the VaR class.
 """
 
 import numpy as np
+
 from var import VaR, load_data, objectives
 
 data = load_data()
@@ -24,9 +25,7 @@ def test_pelve_parametric_objective():
     test_1 = objective(0.01)
     target_1 = 0.027561900353827606
 
-    test_2 = objective(
-        0.075
-    )  # This means, that the ES value at a 92.5% confidence level is approximately the same as the VaR value at 99% confidence level.
+    test_2 = objective(0.075)  # This means, that the ES value at a 92.5% confidence level is approximately the same as the VaR value at 99% confidence level.
     target_2 = 0.00033400209647668766
 
     assert np.isclose(test_1, target_1)

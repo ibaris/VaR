@@ -9,9 +9,11 @@ Test Failure Rate
 
 Test the failure rate of the VaR model with comparison to the failure rate computed by vartest.
 """
-from var import VaR, load_data
+
 import numpy as np
 import vartests
+
+from var import VaR, load_data
 
 
 def test_failure_rate():
@@ -26,4 +28,4 @@ def test_failure_rate():
 
         for i, item in enumerate(evaluate.index):
             bth_exp = bth[var.header_exception[i]]
-            assert evaluate.loc[item, 'Percent'] == vartests.failure_rate(bth_exp)['failure rate']
+            assert evaluate.loc[item, "Percent"] == vartests.failure_rate(bth_exp)["failure rate"]

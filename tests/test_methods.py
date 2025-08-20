@@ -10,9 +10,10 @@ Test VaR Methods
 Test the Value at Risk methods in the methods module.
 """
 
-from var.methods import *
 import numpy as np
 from scipy.stats import norm
+
+from var.methods import *
 
 
 def test_parametric():
@@ -20,7 +21,7 @@ def test_parametric():
     test_pnl = np.array([10, -5, 20, -15, 30, -10, 15, -5, 25, -15])
     test_alpha = np.array([0.05, 0.01])  # Example alpha values
     daily_std = np.std(test_pnl)
-    expected_results = np.array([-21.5224678, -32.51123235, -21.5224678, -32.51123235, 19., 19.])
+    expected_results = np.array([-21.5224678, -32.51123235, -21.5224678, -32.51123235, 19.0, 19.0])
 
     # Call the function with the test data
     results = parametric(test_pnl, test_alpha, daily_std)
