@@ -1,17 +1,33 @@
-# -*- coding: utf-8 -*-
 """
-HEADER
-======
+VaR Methods Module
+==================
 *Created on 29.06.2021 by bari_is*
 
 *For COPYING and LICENSE details, please refer to the LICENSE file*
 
+This module provides a suite of methods for calculating Value at Risk (VaR) and related risk metrics for financial portfolios. It includes
+implementations of several standard approaches to VaR estimation, including historical, parametric, Monte Carlo, and GARCH-based methods.
+Additionally, it provides functions to compute Expected Shortfall (ES) and Conditional Drawdown at Risk (CDaR), which are important
+complementary risk measures.
+
+Functions
+---------
+- calculate_expected_shortfall: Computes the expected shortfall given profit and loss (PnL) data and VaR values.
+- compute_cdar: Calculates the conditional drawdown at risk for a portfolio.
+- historic: Estimates VaR using the historical simulation method.
+- parametric: Estimates VaR using the parametric (variance-covariance) method, assuming a specified distribution.
+- monte_carlo: Estimates VaR using Monte Carlo simulation, with support for custom distributions.
+- garch: Estimates VaR using a GARCH(1,1) model for volatility forecasting.
+
+All methods return concatenated arrays of VaR, Expected Shortfall, and CDaR values for specified significance levels. The module is
+designed for extensibility and integration with portfolio risk management workflows.
+
 """
+
 import warnings
 
 import numpy as np
 from arch import arch_model
-from numba import jit
 from scipy import stats
 
 from var.auxiliary import array_like
@@ -19,9 +35,9 @@ from var.auxiliary import array_like
 __all__ = ["historic", "parametric", "monte_carlo", "garch"]
 
 
-@jit(cache=True)
 def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray:
-    """ Compute the expected Shortfall
+    """
+    Compute the expected Shortfall
 
     Parameters
     ----------
@@ -42,8 +58,7 @@ def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray
         tail_returns = pnl[pnl < item]
 
         if len(tail_returns) == 0:
-            warnings.warn("VaR is too high. No returns were found below the VaR level. "
-                          "Please check the inputs or increase the VaR level.")
+            warnings.warn("VaR is too high. No returns were found below the VaR level. Please check the inputs or increase the VaR level.")
             es_values[i] = item
             continue
 
@@ -53,9 +68,9 @@ def calculate_expected_shortfall(pnl: array_like, var: array_like) -> np.ndarray
     return es_values
 
 
-@jit(cache=True)
 def compute_cdar(pnl: array_like, var: array_like) -> np.ndarray:
-    """Compute the Drawdown of a portfolio
+    """
+    Compute the Drawdown of a portfolio
 
     Parameters
     ----------
@@ -92,6 +107,8 @@ def historic(pnl: array_like, alpha: array_like, **kwargs) -> np.ndarray:
         A DataFrame with the daily profit and losses.
     alpha : array_like
         A list significance levels (alpha values) for VaR.
+    kwargs : dict
+        Additional keyword Arguments.
 
     Returns
     -------
@@ -106,7 +123,10 @@ def historic(pnl: array_like, alpha: array_like, **kwargs) -> np.ndarray:
     confidence_level = 1 - alpha
 
     var_values = np.percentile(
-        pnl, 100 - (confidence_level * 100), method="lower")
+        pnl,
+        100 - (confidence_level * 100),
+        method="lower",
+    )
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
     cdar_values = compute_cdar(pnl=pnl, var=var_values)
 
@@ -115,10 +135,16 @@ def historic(pnl: array_like, alpha: array_like, **kwargs) -> np.ndarray:
     return data
 
 
-def parametric(pnl: array_like, alpha: array_like, daily_std: float, ppf: callable = stats.norm.ppf, **kwargs) -> np.ndarray:
+def parametric(
+    pnl: array_like,
+    alpha: array_like,
+    daily_std: float,
+    ppf: callable = stats.norm.ppf,
+    **kwargs,
+) -> np.ndarray:
     """
     Under the parametric method, also known as variance-covariance method, VAR is calculated as a function of mean
-    and variance of the returns series, assuming normal distribution.
+    and variance of the returns series, assuming a given distribution.
 
     Parameters
     ----------
@@ -159,14 +185,14 @@ def monte_carlo(
     pnl: array_like,
     alpha: array_like,
     rvs: callable = stats.norm.rvs,
-    **kwargs
+    **kwargs,
 ) -> np.ndarray:
     """
     The Monte Carlo Method involves developing a model for future stock price returns and running multiple
     hypothetical trials through the model. A Monte Carlo simulation refers to any method that randomly
     generates trials, but by itself does not tell us anything about the underlying methodology.
 
-    The Stressed Monte Carlo Method uses the Gumel distribution (gummel_r) to generate the random trials. 
+    The Stressed Monte Carlo Method uses the Gumel distribution (gummel_r) to generate the random trials.
     The Gumbel distribution is sometimes referred to as a type I Fisher-Tippett distribution. It is also
     related to the extreme value distribution, log-Weibull and Gompertz distributions.
 
@@ -186,8 +212,8 @@ def monte_carlo(
 
     Notes
     -----
-    The Stressed Monte Carlo Method uses the Gumel distribution ('gumbel_r') to generate the random trials. 
-    The Gumbel distribution is sometimes referred to as a type I Fisher-Tippett distribution. It is also 
+    The Stressed Monte Carlo Method uses the Gumel distribution ('gumbel_r') to generate the random trials.
+    The Gumbel distribution is sometimes referred to as a type I Fisher-Tippett distribution. It is also
     related to the extreme value distribution, log-Weibull and Gompertz distributions.
 
     References
@@ -206,8 +232,7 @@ def monte_carlo(
     simulated_returns = np.sort(simulated_returns)
 
     # Compute the VaR at the desired confidence level
-    var_values = [-simulated_returns[int(n_simulations * item)]
-                  for item in confidence_level]
+    var_values = [-simulated_returns[int(n_simulations * item)] for item in confidence_level]
 
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
     cdar_values = compute_cdar(pnl=pnl, var=var_values)
@@ -219,7 +244,7 @@ def monte_carlo(
 
 def garch(pnl, alpha, **kwargs):
     """
-    This method estimates the Value at Risk with a generalised autoregressive conditional heteroskedasticity (GARCH)
+    The GARCH method estimates the Value at Risk with a generalised autoregressive conditional heteroskedasticity (GARCH)
     model.
 
     Parameters
@@ -243,17 +268,16 @@ def garch(pnl, alpha, **kwargs):
         warnings.simplefilter("ignore")
 
         # Specify the GARCH model
-        model = arch_model(pnl, vol='Garch', p=1, q=1)
+        model = arch_model(pnl, vol="Garch", p=1, q=1)
 
         # Fit the model
-        model_fit = model.fit(disp='off')
+        model_fit = model.fit(disp="off")
 
         # Compute conditional standard deviations from the model
         conditional_volatilities = model_fit.conditional_volatility
 
     # Compute VaR at the desired confidence level (e.g., 99%)
-    var_values = [(stats.norm.ppf(item) * conditional_volatilities)[-1]
-                  for item in alpha]
+    var_values = [(stats.norm.ppf(item) * conditional_volatilities)[-1] for item in alpha]
 
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
     cdar_values = compute_cdar(pnl=pnl, var=var_values)
