@@ -10,4 +10,3 @@ scipy
 seaborn
 setuptools
 tqdm
-vartests

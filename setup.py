@@ -29,8 +29,9 @@ at Risk (CDaR).
 # Environmental Functions
 # ------------------------------------------------------------------------------------------------------------
 # Function to read the contents of requirements.txt
-def read_requirements():
-    """Read requirements.txt, returning a list of dependencies.
+def read_requirements() -> list[str]:
+    """
+    Read requirements.txt, returning a list of dependencies.
 
     Returns
     -------
@@ -64,9 +65,9 @@ setup(
         "Intended Audience :: Education",
         "Intended Audience :: End Users/Desktop",
         "Intended Audience :: Financial and Insurance Industry",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Operating System :: Microsoft",
     ],
 )
