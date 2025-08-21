@@ -36,6 +36,7 @@ from arch.utility.exceptions import ConvergenceWarning
 from fitter import Fitter
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from numpy.lib.stride_tricks import sliding_window_view
 from scipy.optimize import dual_annealing
 from tqdm import trange
 
@@ -130,8 +131,9 @@ class VaR:
     def __init__(
         self,
         returns: pd.DataFrame,
-        weights: Optional[Sequence] = None,
-        alpha: Union[array_like, None] = None,
+        weights: array_like | None = None,
+        alpha: array_like | None = None,
+        freq: Literal["B", "D", "W", "M", "Q", "Y", "h", "min", "s", "ms", "us", "ns"] = "D",
         distribution: Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r", "f"] = "norm",
         **kwargs: dict,
     ) -> None:
@@ -161,6 +163,8 @@ class VaR:
         Note, that the length of the weights must the same as the amount of columns of the `returns` parameter.
 
         """
+        self.freq = freq
+
         if distribution not in list(get_args(distributions)):
             raise ValueError(f"Distribution {distribution} not available. Available distributions are {list(get_args(distributions))}.")
 
@@ -192,7 +196,7 @@ class VaR:
         confidence = 1 - self.alpha
 
         # Create Header ====================================================================
-        headers = ["VaR", "ES", "CDaR"]
+        headers = ["VaR", "ES", "DD"]
 
         self.header = []
         for i in range(len(headers)):
@@ -202,9 +206,12 @@ class VaR:
 
         # Compute General Information ======================================================
         self.returns = returns
-        self.n = self.returns.index.shape[0]
+        self.n = self.returns.shape[0]
+        self.k = self.returns.shape[-1]
         self.__max_date = self.returns.index.max()
-        self.pnl = pd.DataFrame(np.average(self.returns, 1, self.weights), index=self.returns.index, columns=["Daily PnL"])
+        self._pnl_header = f"PnL({self.freq})"
+
+        self.pnl = pd.DataFrame(np.average(self.returns, 1, self.weights), index=self.returns.index, columns=[self._pnl_header])
 
         cov_matrix = self.returns.cov()
 
@@ -299,8 +306,7 @@ class VaR:
     # ----------------------------------------------------------------------------------------------
     def fit_distributions(
         self,
-        distribution: Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r", "f"] | None = None,
-        include_other: bool = False,
+        distribution: distributions | None = None,
         plot: bool = False,
         verbose: bool = False,
     ) -> None:
@@ -309,19 +315,16 @@ class VaR:
 
         Parameters
         ----------
-        distribution: Literal["chi2", "gamma", "lognorm", "norm", "uniform", "t", "gumbel_r", "f"] or None, optional
+        distribution: distributions or None, optional
             Choose a distribution to fit. If None (default)  consider the one you specified in the
             initialization process (default).
-        include_other : bool, optional
-            Determine if all available distributions should be considered in order to find the best fitting
-            distribution (True), or only the one you specified in the initialization process (default).
         plot : bool, optional
             Plot the best fitted distribution, by default False.
         verbose : bool, optional
             Print intermediate steps, by default False.
         """
         if distribution is None:
-            distribution = self.__dist_name if not include_other else get_args(distributions)
+            distribution = get_args(distributions)
 
         f = Fitter(self.pnl.to_numpy().flatten(), distributions=distribution)
         f.fit(progress=verbose)
@@ -335,7 +338,7 @@ class VaR:
             print(f.summary(plot=plot))
 
         best_fit = f.get_best(method="sumsquare_error")
-        self.__dist_name = [best_fit.keys()][0]
+        self.__dist_name = next(iter(best_fit.keys()))
         self.distribution = __DISTRIBUTIONS__[self.__dist_name]
         self.kwargs = best_fit[self.__dist_name]
 
@@ -344,6 +347,11 @@ class VaR:
             print("Best fit:")
             print("---------")
             print(f"Distribution {self.__dist_name} with parameters {self.kwargs}")
+
+    @property
+    def get_distribution(self) -> dict:
+        """Return the Distribution parameter"""
+        return {"name": self.__dist_name, "kwargs": self.kwargs}
 
     def historic(self) -> pd.DataFrame:
         """
@@ -360,9 +368,8 @@ class VaR:
         [investopedia](https://www.investopedia.com/articles/04/092904.asp)
 
         """
-        data = historic(self.pnl.values, self.alpha)
-        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
-        return df
+        data = historic(self.pnl.to_numpy().T, self.alpha, axis=1)  # PnL Shape: (1, T)
+        return data.to_df([self.__max_date])
 
     def parametric(self) -> pd.DataFrame:
         """
@@ -380,13 +387,19 @@ class VaR:
         """
         kwargs = self.kwargs.copy()
 
-        kwargs.pop("loc", None)
-        kwargs.pop("scale", None)
+        # kwargs.pop("loc", None)
+        # kwargs.pop("scale", None)
 
-        data = parametric(pnl=self.pnl.values, alpha=self.alpha, daily_std=self._portfolio_volatility, ppf=self.distribution.ppf, **kwargs)
+        data = parametric(
+            pnl=self.pnl.to_numpy().T,
+            alpha=self.alpha,
+            std=self._portfolio_volatility,
+            ppf=self.distribution.ppf,
+            axis=1,
+            **kwargs,
+        )
 
-        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
-        return df
+        return data.to_df([self.__max_date])
 
     def monte_carlo(self) -> pd.DataFrame:
         """
@@ -414,7 +427,12 @@ class VaR:
         [investopedia 2](https://www.investopedia.com/ask/answers/061515/what-stress-testing-value-risk-var.asp)
         [SciPy Gumbel Function](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gumbel_r.html)
         """
-        data = monte_carlo(pnl=self.pnl.values, alpha=self.alpha, rvs=self.distribution.rvs, **self.kwargs)
+        data = monte_carlo(
+            pnl=self.pnl.to_numpy().T,
+            alpha=self.alpha,
+            rvs=self.distribution.rvs,
+            **self.kwargs,
+        )
 
         df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
@@ -434,7 +452,7 @@ class VaR:
         [Julija Cerović Smolović, 2017](https://doi.org/10.1080/1331677X.2017.1305773)
 
         """
-        data = garch(self.pnl.values, self.alpha)
+        data = garch(self.pnl.to_numpy().T, self.alpha)
         df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
         return df
 
@@ -470,7 +488,11 @@ class VaR:
         summary.index.name = time.strftime("%Y-%m-%d")
         return summary
 
-    def backtest(self, method: Literal["h", "p", "mc", "g"], window: int = 250, auto_fit: bool = False) -> pd.DataFrame:
+    def backtest(
+        self,
+        method: Literal["h", "p", "mc", "g"],
+        window: int = 250,
+    ) -> pd.DataFrame:
         """
         Generate the Backtest data.
 
@@ -484,14 +506,17 @@ class VaR:
                 * 'g': VaR calculated with the garch method.
         window : int
             Backtest horizon in the same unit as the returns. Default is 250.
-        auto_fit : bool, optional
-            Automatically fit the distribution to the data, by default False.
 
         Returns
         -------
         out : pd.DataFrame
             A DataFrame object with Daily PnL, VaR and VaR exception values.
+
+        Note
+        ----
+        The GARCH method will take a while, since it is not possible to vectorize it.
         """
+        # Utilities =======================================================================
         if method not in __METHODS__:
             raise ValueError(
                 f"Method {method} not understood. Available methods are 'h' ('historical'), 'p' ('parametric'), "
@@ -504,64 +529,53 @@ class VaR:
         # Add the distribution parameter to the keyword arguments.
         kwargs.update(self.kwargs)
 
-        # * Delete loc scale values, since these are different for each back-testing period.
-        kwargs.pop("loc", None)
-        kwargs.pop("scale", None)
-
         function_name = method_applied.__name__
         str_method = function_name.replace("_", " ").title()
 
-        desc = f"Backtest: {str_method} Method"
+        # Windowed Return Computation =====================================================
+        pnl = self.returns @ self.weights
 
-        var_dict = {}
-        for i in trange(self.n - window, desc=desc, leave=True):
-            returns_sample = self.returns[i : i + window]
+        pnl_w = sliding_window_view(pnl, window_shape=(window))[:-1]
+        date_w = sliding_window_view(pnl.index, window_shape=(window))[:-1].max(axis=1) + +np.timedelta64(1, self.freq)
 
-            pnl = np.average(returns_sample, 1, self.weights)
-            kwargs["pnl"] = pnl
+        kwargs["pnl"] = pnl_w
+        kwargs["axis"] = 1
 
-            if auto_fit:
-                f = Fitter(pnl, distributions=self.__dist_name)
-                f.fit(progress=False)
+        # Methods --------------------------------------------------------------
+        if method == "p":
+            # Parametric -------------------------------------------
+            std = pnl_w.std(axis=1)
 
-                best_fit = f.get_best(method="sumsquare_error")
-                kwargs.update(best_fit[self.__dist_name])
+            kwargs.pop("scale", None)
+            kwargs.pop("loc", None)
 
-            else:
-                kwargs["loc"] = np.mean(pnl)
-                kwargs["scale"] = np.std(pnl)
+            kwargs["std"] = std
+            kwargs["ppf"] = self.distribution.ppf
 
-            if method == "p":
-                cov_matrix = returns_sample.cov()
-                daily_std = np.sqrt(self.weights.T.dot(cov_matrix).dot(self.weights))
+        elif method == "mc":
+            # Monte Carlo ----------------------------------------------------------
+            kwargs["rvs"] = self.distribution.rvs
 
-                kwargs.pop("loc", None)
-                kwargs.pop("scale", None)
+        elif method == "g":
+            kwargs.pop("axis", None)
 
-                kwargs["daily_std"] = daily_std
-                kwargs["ppf"] = self.distribution.ppf
+        # Run Simulation -------------------------------------------------------
+        sim = method_applied(**kwargs)
 
-            if method == "mc":
-                kwargs["rvs"] = self.distribution.rvs
+        # Post-Processing =================================================================
+        sim = sim.to_df(index=date_w)
 
-            var_dict[returns_sample.index.max()] = method_applied(**kwargs)
-
-        daily_var_table = pd.DataFrame.from_dict(var_dict).T.astype("float")
-        daily_var_table.index.name = str_method
-        daily_var_table.columns = self.header
-
-        daily_var_table.index = daily_var_table.index + pd.DateOffset(1)  # Adjustment for matching VaR and actual PnL
-
-        df = pd.merge_asof(self.pnl, daily_var_table, right_index=True, left_index=True)
+        df = pd.merge_asof(self.pnl, sim, right_index=True, left_index=True)
         df = df.apply(pd.to_numeric)
 
-        df1 = df.filter(self.header)  # * This contains the VaR and ES values
+        masks = [df[self._pnl_header] < df[header] for header in self.header]
 
-        for i, _ in enumerate(self.header):
-            df[self.header_exception[i]] = df["Daily PnL"] < df1.to_numpy()[:, i]
+        acc = np.where(masks, True, False)
+
+        df[self.header_exception] = acc.T
 
         df = df.dropna()
-        df.index.name = str_method
+        df.name = str_method
 
         return df
 
@@ -617,7 +631,7 @@ class VaR:
         # Statistics =======================================================================
         for i, _ in enumerate(self.header):
             var_val = df1.to_numpy()[:, i][df2.to_numpy()[:, i]]
-            pnl = table["Daily PnL"][df2.to_numpy()[:, i]]
+            pnl = table[self._pnl_header][df2.to_numpy()[:, i]]
             data = np.abs(pnl - var_val)
 
             mean_values = data.mean()
@@ -757,13 +771,13 @@ class VaR:
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
-        ax.plot(table["Daily PnL"], color="#003049", label="Daily PnL")
+        ax.plot(table[self._pnl_header], color="#003049", label=self._pnl_header)
 
         for i, head in enumerate(header_list):
             color = next(color_cycle)
             ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
 
-            exceed_0 = table[table[header_exception_list[i]] == True]["Daily PnL"]
+            exceed_0 = table[table[header_exception_list[i]] == True][self._pnl_header]
 
             ax.scatter(exceed_0.index, exceed_0, marker=next(marker_cycle), facecolors="none", edgecolors=color, s=120, label=header_exception_list[i])
 
@@ -815,13 +829,13 @@ class VaR:
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
-        ax.plot(table["Daily PnL"], color="#003049", label="Daily PnL")
+        ax.plot(table[self._pnl_header], color="#003049", label=self._pnl_header)
 
         for i, head in enumerate(header_list):
             color = next(color_cycle)
             ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
 
-            exceed_0 = table[table[header_exception_list[i]]]["Daily PnL"]
+            exceed_0 = table[table[header_exception_list[i]]][self._pnl_header]
 
             ax.scatter(exceed_0.index, exceed_0, marker=next(marker_cycle), facecolors="none", edgecolors=color, s=120, label=header_exception_list[i])
 
@@ -871,13 +885,13 @@ class VaR:
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
-        ax.plot(table["Daily PnL"], color="#003049", label="Daily PnL")
+        ax.plot(table[self._pnl_header], color="#003049", label=self._pnl_header)
 
         for i, head in enumerate(header_list):
             color = next(color_cycle)
             ax.plot(table[head], color=color, linestyle=next(line_style_cycle), alpha=0.7, label=head)
 
-            exceed_0 = table[table[header_exception_list[i]]]["Daily PnL"]
+            exceed_0 = table[table[header_exception_list[i]]][self._pnl_header]
 
             ax.scatter(exceed_0.index, exceed_0, marker=next(marker_cycle), facecolors="none", edgecolors=color, s=120, label=header_exception_list[i])
 
