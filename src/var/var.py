@@ -434,10 +434,12 @@ class VaR:
             **self.kwargs,
         )
 
-        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
-        return df
+        return data.to_df([self.__max_date])
 
-    def garch(self) -> pd.DataFrame:
+    def garch(
+        self,
+        dist: Literal["normal", "gaussian", "t", "studentst", "ged", "generalized error"] = "normal",
+    ) -> pd.DataFrame:
         """
         This method estimates the Value at Risk with a generalised autoregressive conditional heteroskedasticity (GARCH)
         model.
@@ -452,9 +454,8 @@ class VaR:
         [Julija Cerović Smolović, 2017](https://doi.org/10.1080/1331677X.2017.1305773)
 
         """
-        data = garch(self.pnl.to_numpy().T, self.alpha)
-        df = pd.DataFrame(dict(zip(self.header, data)), index=[self.__max_date])
-        return df
+        data = garch(self.pnl.to_numpy().T, self.alpha, dist=dist)
+        return data.to_df([self.__max_date])
 
     def summary(self) -> pd.DataFrame:
         """
@@ -492,6 +493,7 @@ class VaR:
         self,
         method: Literal["h", "p", "mc", "g"],
         window: int = 250,
+        garch_dist: Literal["normal", "gaussian", "t", "studentst", "ged", "generalized error"] = "normal",
     ) -> pd.DataFrame:
         """
         Generate the Backtest data.
@@ -558,6 +560,10 @@ class VaR:
 
         elif method == "g":
             kwargs.pop("axis", None)
+            kwargs.pop("scale", None)
+            kwargs.pop("loc", None)
+
+            kwargs.update({"dist": garch_dist})
 
         # Run Simulation -------------------------------------------------------
         sim = method_applied(**kwargs)
@@ -617,7 +623,7 @@ class VaR:
         # * This contains the VaR and ES exceptions
         df2 = table.filter(self.header_exception)
 
-        columns = ["Amount", "Percent", "Mean Deviation", "STD Deviation", "Min Deviation", "Max Deviation"]
+        columns = ["Total", "Exceptions", "Percent", "Mean Deviation", "STD Deviation", "Min Deviation", "Max Deviation"]
         df = pd.DataFrame(columns=columns, index=self.header)
 
         # ----------------------------------------------------------------------------------------------
@@ -639,11 +645,11 @@ class VaR:
             max_values = data.max()
             std_values = data.std()
 
-            df.iloc[i] = [amount[i], percentages[i], mean_values, std_values, min_values, max_values]
+            df.iloc[i] = [backtest_data.shape[0], amount[i], percentages[i], mean_values, std_values, min_values, max_values]
 
         return df
 
-    def compute_pelve(self, method: str, alpha: float = 0.01) -> tuple[float, float]:
+    def compute_pelve(self, method: Literal["h", "p"], alpha: float = 0.01) -> tuple[float, float]:
         """
         PELVE is intended to help decide what confidence level to use when replacing Value at Risk (VaR)
         with Expected Shortfall (ES) in risk assessments.
@@ -698,12 +704,12 @@ class VaR:
 
         alpha = np.array([alpha])
 
-        kwargs = {"pnl": self.pnl.to_numpy().flatten(), "alpha": alpha}
+        kwargs = {"pnl": self.pnl.to_numpy().T, "alpha": alpha}
 
         if method == "p":
             kwargs.update({"daily_std": self._portfolio_volatility})
 
-        var_value = method_applied(**kwargs)[0]
+        var_value = method_applied(**kwargs).var[0, 0]
 
         # Compute Objective Function =======================================================
         # Remove alpha from kwargs since it is not needed anymore.
@@ -726,12 +732,12 @@ class VaR:
         pelve = optimal_es_confidence_level / alpha
 
         # Compute Error ====================================================================
-        kwargs = {"pnl": self.pnl.to_numpy().flatten(), "alpha": np.array([optimal_es_confidence_level])}
+        kwargs = {"pnl": self.pnl.to_numpy().T, "alpha": np.array([optimal_es_confidence_level])}
 
         if method == "p":
             kwargs.update({"daily_std": self._portfolio_volatility})
 
-        es_value = method_applied(**kwargs)[1]
+        es_value = method_applied(**kwargs).es[0, 0]
 
         difference = np.abs(var_value - es_value)
 
@@ -742,6 +748,7 @@ class VaR:
         backtest_data: pd.DataFrame,
         begin_date: str | None = None,
         end_date: str | None = None,
+        alpha_index: int | slice | None = None,
     ) -> tuple[Figure, Axes]:
         """
         Plot the Value at Risk backtest data.
@@ -768,6 +775,14 @@ class VaR:
             header = self.header[windows : windows + self.len_alpha]
             header_list.extend(header)
             header_exception_list.extend(header_exception)
+
+        if alpha_index is not None:
+            header_list = header_list[alpha_index]
+            header_exception_list = header_exception_list[alpha_index]
+
+            if isinstance(header_list, str):
+                header_list = [header_list]
+                header_exception_list = [header_exception_list]
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
@@ -800,6 +815,7 @@ class VaR:
         backtest_data: pd.DataFrame,
         begin_date: str | None = None,
         end_date: str | None = None,
+        alpha_index: int | slice | None = None,
     ) -> tuple[Figure, Axes]:
         """
         Plot the Conditional Value at Risk backtest data.
@@ -827,6 +843,14 @@ class VaR:
             header_list.extend(header)
             header_exception_list.extend(header_exception)
 
+        if alpha_index is not None:
+            header_list = header_list[alpha_index]
+            header_exception_list = header_exception_list[alpha_index]
+
+            if isinstance(header_list, str):
+                header_list = [header_list]
+                header_exception_list = [header_exception_list]
+
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 
         ax.plot(table[self._pnl_header], color="#003049", label=self._pnl_header)
@@ -837,7 +861,7 @@ class VaR:
 
             exceed_0 = table[table[header_exception_list[i]]][self._pnl_header]
 
-            ax.scatter(exceed_0.index, exceed_0, marker=next(marker_cycle), facecolors="none", edgecolors=color, s=120, label=header_exception_list[i])
+            ax.scatter(exceed_0.index, exceed_0, marker=next(marker_cycle), facecolors="none", edgecolors=color, s=120)
 
         ax.spines["bottom"].set_color("#b0abab")
         ax.spines["top"].set_color("#b0abab")
@@ -851,11 +875,14 @@ class VaR:
         plt.tight_layout()
         plt.show()
 
-    def cdar_plot(
+        return fig, ax
+
+    def dd_plot(
         self,
         backtest_data: pd.DataFrame,
         begin_date: str | None = None,
         end_date: str | None = None,
+        alpha_index: int | slice | None = None,
     ) -> tuple[Figure, Axes]:
         """
         Plot the Conditional Drawdown at Risk backtest data.
@@ -882,6 +909,14 @@ class VaR:
             header = self.header[windows : windows + self.len_alpha]
             header_list.extend(header)
             header_exception_list.extend(header_exception)
+
+        if alpha_index is not None:
+            header_list = header_list[alpha_index]
+            header_exception_list = header_exception_list[alpha_index]
+
+            if isinstance(header_list, str):
+                header_list = [header_list]
+                header_exception_list = [header_exception_list]
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 4))
 

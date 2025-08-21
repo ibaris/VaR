@@ -27,6 +27,7 @@ designed for extensibility and integration with portfolio risk management workfl
 from __future__ import annotations
 
 import warnings
+from typing import Literal
 
 import numpy as np
 from arch import arch_model
@@ -159,7 +160,7 @@ def parametric(
         A DataFrame with the daily profit and losses.
     alpha : np.ndarray
         A list significance levels (alpha values) for VaR.
-    daily_std : float
+    std : float
         Standard Deviation of the portfolio.
     ppf : callable
         Percent point function (inverse of cdf — percentiles). Default is `stats.norm.ppf`.
@@ -266,8 +267,8 @@ def monte_carlo(
 def garch(
     pnl: array_like,
     alpha: array_like,
-    ppf: callable = stats.norm.ppf,
-    **kwargs,
+    dist: Literal["normal", "gaussian", "t", "studentst", "ged", "generalized error"] = "normal",
+    **kwargs: dict,
 ):
     """
     The GARCH method estimates the Value at Risk with a generalised autoregressive conditional heteroskedasticity (GARCH)
@@ -301,11 +302,16 @@ def garch(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
 
+        args = ()
+        if dist in ["t", "studentst", "ged", "generalized error"]:
+            args = min(pnl.shape[-1] - 1, 500)
+            args = (args,)
+
         var_values = np.zeros((pnl.shape[0], len(alpha)))
 
         for i, data in enumerate(tqdm(pnl, desc="Fitting GARCH Model", leave=False)):
             # Specify the GARCH model
-            model = arch_model(data, vol="Garch", p=1, q=1)
+            model = arch_model(data, vol="Garch", p=1, q=1, dist=dist)
 
             # Fit the model
             model_fit = model.fit(disp="off")
@@ -314,7 +320,7 @@ def garch(
             conditional_volatility = model_fit.conditional_volatility
 
             # Compute VaR at the desired confidence level (e.g., 99%)
-            var_values[i] = [(ppf(item, **kwargs) * conditional_volatility)[-1] for item in alpha]
+            var_values[i] = [(model.distribution.ppf(item, *args, **kwargs) * conditional_volatility)[-1] for item in alpha]
 
     es_values = calculate_expected_shortfall(pnl=pnl, var=var_values)
     dd_values = compute_drawdown(pnl=pnl, var=var_values)
