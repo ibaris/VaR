@@ -172,6 +172,9 @@ class VaR:
         if weights is None:
             weights = np.ones(returns.shape[1]) / returns.shape[1]
 
+        if not isinstance(weights, np.ndarray):
+            weights = np.array(weights).flatten()
+
         if len(weights) != returns.shape[1]:
             raise ValueError(
                 "The length of the weights must be equal to the number of assets in the portfolio. "
